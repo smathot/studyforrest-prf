@@ -8,19 +8,28 @@ Copyright 2018 Sebastiaan Mathôt (<https://www.cogsci.nl/smathot>)
 This repository contains code to perform population-receptive-field (PRF) mapping based on the retinotopic-mapping data from the [StudyForrest](http://studyforrest.org/) project. PRF mapping is a technique to estimate the spatial coordinates and standard deviation of receptive fields of voxels in fMRI data.
 
 
-## Transforming fMRI data to MNI space
-
-The data from StudyForrest is in a participant-specific space. We want to transform the data to standard MNI space. To do so, we first need to get the data from the `studyforrest-data-aligned` dataset, and then execute `code/warp.sh`. This requires the `applywarp` command from FSL 5.0.
+## Step 1: Get input data files from StudyForrest
 
 ~~~
 datalad get inputs/studyforrest-data-aligned/sub-*/in_bold3Tp2/sub-*_task-retmap*_run-1_bold.nii.gz
-code/warp.sh
+datalad get inputs/studyforrest-data-templatetransforms/templates/grpbold3Tp2/brain.nii.gz
+datalad get inputs/studyforrest-data-templatetransforms/sub-*/bold3Tp2/in_grpbold3Tp2/subj2tmpl_warp.nii.gz
+datalad get inputs/studyforrest-data-phase2/stimuli/retinotopic_mapping/*.mkv
 ~~~
 
 
-## PRF mapping
+## Step 2: Transform fMRI data to MNI space
 
-TODO
+The data from StudyForrest is in a participant-specific space. `warp.sh` converts this data to MNI space, which is used by the rest of the scripts. This requires the `applywarp` command from FSL 5.0.
+
+~~~
+./code/warp.sh
+~~~
+
+
+## Step 3: PRF mapping
+
+See `code/prf-mapping.ipynb`.
 
 
 ## License
