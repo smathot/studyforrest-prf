@@ -8,6 +8,19 @@ Copyright 2018 Sebastiaan Mathôt (<https://www.cogsci.nl/smathot>)
 This repository contains code to perform population-receptive-field (PRF) mapping based on the retinotopic-mapping data from the [StudyForrest](http://studyforrest.org/) project. PRF mapping is a technique to estimate the spatial coordinates and standard deviation of receptive fields of voxels in fMRI data.
 
 
+## Dependencies
+
+This code has been developed on Ubuntu 18.04 with FSL 5.0 installed through NeuroDebian. However, all code should run with minor adjustments on any system. The following packages are required:
+
+- Python libraries for numeric computing and neuroimaging:
+	- nilearn
+	- sklearn
+	- nibabel
+	- nipy
+	- datamatrix
+- FSL 5.0
+
+
 ## Step 1: Get input data files from StudyForrest
 
 ~~~
@@ -20,7 +33,7 @@ datalad get inputs/studyforrest-data-phase2/stimuli/retinotopic_mapping/*.mkv
 
 ## Step 2: Transform fMRI data to MNI space
 
-The data from StudyForrest is in a participant-specific space. `warp.sh` converts this data to MNI space, which is used by the rest of the scripts. This requires the `applywarp` command from FSL 5.0.
+The data from StudyForrest is in a participant-specific space. `warp.sh` converts this data to MNI space, which is used by the rest of the scripts.
 
 ~~~
 ./code/warp.sh

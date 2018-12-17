@@ -32,6 +32,7 @@ def prf_map(stim, data, mask):
     print('pass2')
     pass2 = _prf_map(stim[:, ::4, ::4], vox, xyz, downsample=True, est=pass1)
     print('pass3')
+    xyz = np.where(~np.isnan(pass2[:, :, :, 0]))
     pass3 = _prf_map(stim, vox, xyz, downsample=False, est=pass2)
     return pass3
 
@@ -41,9 +42,9 @@ def _prf_map(stim, vox, xyz, downsample=False, est=None):
     prf_map = np.empty(vox.shape[:-1] + (4,))
     prf_map[:] = np.nan
     for y, x, z in zip(*xyz):
-        if y % 2 or x % 2 or z % 2:
-            continue
         if downsample:
+            if y % 2 or x % 2 or z % 2:
+                continue
             bold = np.nanmean(vox[y:y + 2, x:x + 2, z:z + 2], axis=(0, 1, 2))
         else:
             bold = vox[y, x, z]
