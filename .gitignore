@@ -1,0 +1,5 @@
+.ipynb_checkpoints
+.memoize
+*.pyc
+inputs/bold-predictions
+inputs/studyforrest-data-mni
