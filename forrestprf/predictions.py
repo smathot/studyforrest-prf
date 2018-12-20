@@ -3,7 +3,6 @@
 
 import os
 import numpy as np
-import scipy.ndimage.filters as fi
 from nipy.modalities.fmri.hrf import spmt
 from forrestprf import stimulus
 

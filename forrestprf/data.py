@@ -8,6 +8,7 @@ from datamatrix import functional as fnc
 
 
 MNI_ATLAS = 'inputs/mni-structural-atlas/MNI/MNI-maxprob-thr50-2mm.nii.gz'
+JUELICH_ATLAS = 'inputs/juelich-histological-atlas/Juelich/Juelich-maxprob-thr50-2mm.nii.gz'
 FORREST_BRAIN = 'inputs/studyforrest-data-templatetransforms/templates/grpbold3Tp2/brain.nii.gz'
 NIFTI_SRC = [
     'inputs/studyforrest-data-mni/sub-{sub:02}_task-retmapclw_run-1_bold.nii.gz',
@@ -16,6 +17,13 @@ NIFTI_SRC = [
     'inputs/studyforrest-data-mni/sub-{sub:02}_task-retmapexp_run-1_bold.nii.gz',
 ]
 ROI_OCCIPITAL = 5
+ROI_JUELICH = {
+    'V1': (81, 82),
+    'V2': (83, 84),
+    'V3': (85, 86),
+    'V4': (87, 88),
+    'V5': (89, 90)
+}
 
 
 @fnc.memoize(persistent=True)
@@ -35,6 +43,19 @@ def mni_atlas(roi):
     atlas = nib.load(MNI_ATLAS)
     a = atlas.get_data()
     a[a != roi] = 0
+    mask = image.resample_to_img(
+        atlas,
+        nib.load(FORREST_BRAIN),
+        interpolation='nearest'
+    )
+    return mask
+
+
+def juelich_mask(roi):
+
+    atlas = nib.load(JUELICH_ATLAS)
+    a = atlas.get_data()
+    a[(a != roi[0]) & (a != roi[1])] = 0
     mask = image.resample_to_img(
         atlas,
         nib.load(FORREST_BRAIN),
