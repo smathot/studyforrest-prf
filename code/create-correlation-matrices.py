@@ -6,6 +6,7 @@ from scipy import stats
 import nibabel as nib
 from nilearn import image
 from scipy import signal
+import warnings
 from scipy.stats import linregress
 import multiprocessing
 
@@ -17,17 +18,24 @@ PRF_YC = 64
 PRF_X_RANGE = 4, 156
 PRF_Y_RANGE = 4, 124
 PRF_SD_RANGE = 1, 60
+CLEAN_IMG = False
 N_PROCESS = 4
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
-TRACE_SRC = '/home/sebastiaan/git/coeruleus/sub-{sub:02}/merged_timeseries_run-{run}.csv'
+TRACE_SRC = 'inputs/traces/sub-{sub:02}/merged_timeseries_run-{run}.csv'
 
 
 def get_avmovie_data(sub, run):
+    
+    """Get a clean nifti image for one subject and one avmovie run"""
 
-    return image.clean_img(NIFTI_SRC.format(sub=sub, run=run))
+    if CLEAN_IMG:
+        return image.clean_img(NIFTI_SRC.format(sub=sub, run=run))
+    return image.load_img(NIFTI_SRC.format(sub=sub, run=run))
 
 
 def get_pupil_data(sub, run):
+    
+    """Get a detrended pupil trace for one subject and one avmovie run """
 
     return signal.detrend(
         srs._interpolate(
@@ -39,6 +47,8 @@ def get_pupil_data(sub, run):
 
 
 def get_lc_data(sub, run):
+    
+    """Get a detrended LC trace for one subject and one avmovie run """
 
     dm = io.readtxt(TRACE_SRC.format(sub=sub, run=run))
     return signal.detrend(
@@ -47,6 +57,8 @@ def get_lc_data(sub, run):
 
 
 def corr_img(img, pupil, xyz, dt=0):
+    
+    """Get a per-voxel correlation image between a nifti image and a trace"""
 
     pcor = np.empty(img.shape[:-1])
     pcor[:] = np.nan
@@ -74,6 +86,9 @@ def flatten(nft):
 
     """Get a 1D array of non-nan values"""
 
+    if nft is None:
+        warnings.warn('cannot flatten an image that doesn\'t exist')
+        return np.nan
     a = nft.get_data().flatten()
     return a[~np.isnan(a)]
 
@@ -86,6 +101,7 @@ def do_subject(args):
 
     sub, roi, xyz = args
     rdm = DataMatrix(length=len(RUNS))
+    
     rdm.r_vc_pupil = NiftiColumn
     rdm.r_vc_lc = NiftiColumn
     rdm.r_lc_pupil = FloatColumn
@@ -94,7 +110,14 @@ def do_subject(args):
     rdm.sub = sub
     rdm.roi = roi
     for row, run in zip(rdm, RUNS):
-        print('Starting sub: {}, roi: {}, run: {}'.format(sub, roi, run))
+        print(
+            'Starting sub: {}, roi: {}, run: {}, voxels: {}'.format(
+                sub,
+                roi,
+                run,
+                len(xyz[0])
+            )
+        )
         img = get_avmovie_data(sub, run)
         pupil_trace = get_pupil_data(sub, run)
         lc_trace = get_lc_data(sub, run)
@@ -102,7 +125,8 @@ def do_subject(args):
         row.r_vc_pupil = corr_img(img, pupil_trace, xyz, dt=DT)
         row.r_vc_lc = corr_img(img, lc_trace, xyz, dt=0)
         # Per-ROI correlations
-        avg = np.nanmean(img.get_data(), axis=(0, 1, 2))
+        voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
+        avg = np.nanmean(voxels, axis=0)[:len(pupil_trace)]
         s, i, r, p, se = stats.linregress(avg[DT:], pupil_trace[:-DT])
         row['r_vcavg_pupil'] = r
         s, i, r, p, se = stats.linregress(avg, lc_trace)
@@ -120,39 +144,40 @@ if __name__ == '__main__':
     # RFs.
     dm = io.readpickle('outputs/prf-matrix.pkl')
     for row in dm:
-        trim(
-            row.prf_x.get_data(),
-            minval=PRF_X_RANGE[0],
-            maxval=PRF_X_RANGE[1]
+        x = row.prf_x.get_data()
+        y = row.prf_y.get_data()
+        sd = row.prf_sd.get_data()
+        trim = (
+            (x < PRF_X_RANGE[0]) | (x > PRF_X_RANGE[1]) |
+            (y < PRF_Y_RANGE[0]) | (y > PRF_Y_RANGE[1]) |
+            (sd < PRF_SD_RANGE[0]) | (sd > PRF_SD_RANGE[1])
         )
-        trim(
-            row.prf_y.get_data(),
-            minval=PRF_Y_RANGE[0],
-            maxval=PRF_Y_RANGE[1]
-        )
-        trim(
-            row.prf_sd.get_data(),
-            minval=PRF_SD_RANGE[0],
-            maxval=PRF_SD_RANGE[1]
-        )
+        x[trim] = np.nan
+        y[trim] = np.nan
+        sd[trim] = np.nan
     # Use multiple processes for determining the correlations for performance
-    with multiprocessing.Pool(N_PROCESS) as pool:
-        results = pool.map(
-            do_subject,
-            [
-                (row.sub, row.roi, np.where(~np.isnan(row.prf_x.get_data())))
-                for row in dm
-            ]
-        )
+    args = [
+        (row.sub, row.roi, np.where(~np.isnan(row.prf_x.get_data())))
+        for row in dm
+    ]
+    if N_PROCESS == 1:
+        results = map(do_subject, args)
+    else:
+        with multiprocessing.Pool(N_PROCESS) as pool:
+            results = pool.map(do_subject, args)
     # Merge the correlation matrix and save it
     dm.r_vc_pupil = NiftiColumn
     dm.r_vc_lc = NiftiColumn
     dm.r_lc_pupil = FloatColumn
+    dm.r_vcavg_pupil = FloatColumn
+    dm.r_vcavg_lc = FloatColumn
     for rdm in results:
         i = (dm.roi == rdm.roi[0]) & (dm.sub == rdm.sub[0])
         dm.r_vc_pupil[i] = rdm.r_vc_pupil.mean
         dm.r_vc_lc[i] = rdm.r_vc_lc.mean
         dm.r_lc_pupil[i] = rdm.r_lc_pupil.mean
+        dm.r_vcavg_pupil[i] = rdm.r_vcavg_pupil.mean
+        dm.r_vcavg_lc[i] = rdm.r_vcavg_lc.mean
     csvdm = dm[:]
     del csvdm.prf_err
     del csvdm.prf_sd
@@ -170,18 +195,19 @@ if __name__ == '__main__':
         y = flatten(row.prf_y)
         sd = flatten(row.prf_sd)
         err = flatten(row.prf_err)
-        r = flatten(row.r_pupil)
+        r_vc_pupil = flatten(row.r_vc_pupil)
+        r_vc_lc = flatten(row.r_vc_lc)
         sdm = DataMatrix(len(x))
         sdm.sub = row.sub
         sdm.roi = row.roi
-        sdm.r_pupil = FloatColumn
         sdm.prf_x = FloatColumn
         sdm.prf_y = FloatColumn
         sdm.prf_sd = FloatColumn
-        sdm.r_pupil = r
+        sdm.r_vc_pupil = r_vc_pupil
+        sdm.r_vc_lc = r_vc_lc
         sdm.prf_x = x
         sdm.prf_y = y
         sdm.prf_sd = sd
         ldm <<= sdm
-    ldm.ecc = ((ldm.prf_x - PRF_XC) ** 2 + (ldm.prf_y - PRF_YC)) ** .5
-    io.writetxt(csvdm, 'outputs/longish-correlation-matrix.csv')
+    ldm.ecc = ((ldm.prf_x - PRF_XC) ** 2 + (ldm.prf_y - PRF_YC) ** 2) ** .5
+    io.writetxt(ldm, 'outputs/longish-correlation-matrix.csv')
