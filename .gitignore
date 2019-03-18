@@ -3,3 +3,6 @@
 *.pyc
 inputs/bold-predictions
 inputs/studyforrest-data-mni
+outputs
+bak
+.*.csv
