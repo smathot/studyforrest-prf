@@ -4,17 +4,16 @@
 import numpy as np
 import nibabel as nib
 from nilearn import image
-from datamatrix import functional as fnc
 
 
 MNI_ATLAS = 'inputs/mni-structural-atlas/MNI/MNI-maxprob-thr50-2mm.nii.gz'
 JUELICH_ATLAS = 'inputs/juelich-histological-atlas/Juelich/Juelich-maxprob-thr50-2mm.nii.gz'
 FORREST_BRAIN = 'inputs/studyforrest-data-templatetransforms/templates/grpbold3Tp2/brain.nii.gz'
 NIFTI_SRC = [
-    'inputs/studyforrest-data-mni/sub-{sub:02}_task-retmapclw_run-1_bold.nii.gz',
-    'inputs/studyforrest-data-mni/sub-{sub:02}_task-retmapccw_run-1_bold.nii.gz',
-    'inputs/studyforrest-data-mni/sub-{sub:02}_task-retmapcon_run-1_bold.nii.gz',
-    'inputs/studyforrest-data-mni/sub-{sub:02}_task-retmapexp_run-1_bold.nii.gz',
+    'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapclw_run-1_bold.nii.gz',
+    'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapccw_run-1_bold.nii.gz',
+    'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapcon_run-1_bold.nii.gz',
+    'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapexp_run-1_bold.nii.gz',
 ]
 ROI_OCCIPITAL = 5
 ROI_JUELICH = {
@@ -22,11 +21,9 @@ ROI_JUELICH = {
     'V2': (83, 84),
     'V3': (85, 86),
     'V4': (87, 88),
-    'V5': (89, 90)
 }
 
 
-@fnc.memoize(persistent=True)
 def subject_data(sub):
 
     sessions = np.zeros(360)

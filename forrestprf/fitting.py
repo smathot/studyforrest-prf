@@ -4,7 +4,9 @@
 import random
 import itertools
 import numpy as np
-from forrestprf import predictions, prfmap
+from forrestprf import predictions
+from datamatrix import DataMatrix, NiftiColumn
+import nibabel as nib
 
 
 def prf_map(stim, data, mask, npass=4):
@@ -21,7 +23,7 @@ def prf_map(stim, data, mask, npass=4):
         downsample=2
     )
     if npass == 1:
-        return prfmap.PrfMap(pass1, data)
+        return _prf_dm(pass1, data)
     print('PRF mapping (pass 2)')
     pass2 = _prf_map(
         stim[:, ::4, ::4],
@@ -31,7 +33,7 @@ def prf_map(stim, data, mask, npass=4):
         est=pass1
     )
     if npass == 2:
-        return prfmap.PrfMap(pass2, data)
+        return _prf_dm(pass2, data)
     print('PRF mapping (pass 3)')
     xyz = np.where(~np.isnan(pass2[:, :, :, 0]))
     pass3 = _prf_map(
@@ -42,7 +44,7 @@ def prf_map(stim, data, mask, npass=4):
         scale=2
     )
     if npass == 3:
-        return prfmap.PrfMap(pass3, data)
+        return _prf_dm(pass3, data)
     print('PRF mapping (pass 4)')
     xyz = np.where(~np.isnan(pass3[:, :, :, 0]))
     pass4 = _prf_map(
@@ -52,7 +54,7 @@ def prf_map(stim, data, mask, npass=4):
         scale=2,
         est=pass3
     )
-    return prfmap.PrfMap(pass4, data)
+    return prf_dm
 
 
 def _get_bold(vox, x, y, z, downsample):
@@ -137,12 +139,27 @@ def _fit_prf(stim, bold, search_space):
     ))
     random.shuffle(params)
     min_err = np.inf
+    best_params = np.nan, np.nan, np.nan, np.inf
     for x, y, sd in params:
         err = ((predictions.bold_prediction(x, y, sd, stim) - bold) ** 2).sum()
         if err <= min_err:
             min_err = err
             best_params = x, y, sd, err
     return best_params
+
+
+def _prf_dm(passx, data):
+
+    prf_dm = DataMatrix(length=1)
+    prf_dm.prf_x = NiftiColumn
+    prf_dm.prf_y = NiftiColumn
+    prf_dm.prf_sd = NiftiColumn
+    prf_dm.prf_err = NiftiColumn
+    prf_dm.prf_x = nib.Nifti2Image(passx[:, :, :, 0], affine=data.affine)
+    prf_dm.prf_y = nib.Nifti2Image(passx[:, :, :, 1], affine=data.affine)
+    prf_dm.prf_sd = nib.Nifti2Image(passx[:, :, :, 2], affine=data.affine)
+    prf_dm.prf_err = nib.Nifti2Image(passx[:, :, :, 3], affine=data.affine)
+    return prf_dm
 
 
 if __name__ == '__main__':
@@ -158,6 +175,5 @@ if __name__ == '__main__':
     #mask.get_data()[:] = 0
     #mask.get_data()[34, 12, 22] = 1
     print('Map PRF')
-    from datamatrix import functional as fnc
-    a = prf_map(stim4, bold, mask)
-    print(a[~np.isnan(a)])
+    prf_dm = prf_map(stim4, bold, mask, npass=1)
+    print(prf_dm)
