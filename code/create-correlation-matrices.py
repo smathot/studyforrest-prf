@@ -18,23 +18,27 @@ PRF_YC = 64
 PRF_X_RANGE = 4, 156
 PRF_Y_RANGE = 4, 124
 PRF_SD_RANGE = 1, 60
-CLEAN_IMG = False
-N_PROCESS = 4
+CLEAN_IMG = True
+SMOOTHING = 4
+N_PROCESS = 1
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
 TRACE_SRC = 'inputs/traces/sub-{sub:02}/merged_timeseries_run-{run}.csv'
 
 
 def get_avmovie_data(sub, run):
-    
+
     """Get a clean nifti image for one subject and one avmovie run"""
 
     if CLEAN_IMG:
-        return image.clean_img(NIFTI_SRC.format(sub=sub, run=run))
+        return image.smooth_img(
+            image.clean_img(NIFTI_SRC.format(sub=sub, run=run)),
+            SMOOTHING
+        )
     return image.load_img(NIFTI_SRC.format(sub=sub, run=run))
 
 
 def get_pupil_data(sub, run):
-    
+
     """Get a detrended pupil trace for one subject and one avmovie run """
 
     return signal.detrend(
@@ -47,7 +51,7 @@ def get_pupil_data(sub, run):
 
 
 def get_lc_data(sub, run):
-    
+
     """Get a detrended LC trace for one subject and one avmovie run """
 
     dm = io.readtxt(TRACE_SRC.format(sub=sub, run=run))
@@ -57,7 +61,7 @@ def get_lc_data(sub, run):
 
 
 def corr_img(img, pupil, xyz, dt=0):
-    
+
     """Get a per-voxel correlation image between a nifti image and a trace"""
 
     pcor = np.empty(img.shape[:-1])
@@ -82,7 +86,7 @@ def trim(a, minval=-np.inf, maxval=np.inf):
     a[(a < minval) | (a > maxval)] = np.nan
 
 
-def flatten(nft):
+def flatten(nft, mask=None):
 
     """Get a 1D array of non-nan values"""
 
@@ -90,7 +94,10 @@ def flatten(nft):
         warnings.warn('cannot flatten an image that doesn\'t exist')
         return np.nan
     a = nft.get_data().flatten()
-    return a[~np.isnan(a)]
+    if mask is None:
+        return a[~np.isnan(a)]
+    mask = mask.get_data().flatten()
+    return a[~np.isnan(mask)]
 
 
 def do_subject(args):
@@ -101,7 +108,7 @@ def do_subject(args):
 
     sub, roi, xyz = args
     rdm = DataMatrix(length=len(RUNS))
-    
+
     rdm.r_vc_pupil = NiftiColumn
     rdm.r_vc_lc = NiftiColumn
     rdm.r_lc_pupil = FloatColumn
@@ -140,21 +147,8 @@ def do_subject(args):
 
 if __name__ == '__main__':
 
-    # First read the data with PRF maps, and trim out voxels with poorly fitted
-    # RFs.
+    # First read the data with PRF maps
     dm = io.readpickle('outputs/prf-matrix.pkl')
-    for row in dm:
-        x = row.prf_x.get_data()
-        y = row.prf_y.get_data()
-        sd = row.prf_sd.get_data()
-        trim = (
-            (x < PRF_X_RANGE[0]) | (x > PRF_X_RANGE[1]) |
-            (y < PRF_Y_RANGE[0]) | (y > PRF_Y_RANGE[1]) |
-            (sd < PRF_SD_RANGE[0]) | (sd > PRF_SD_RANGE[1])
-        )
-        x[trim] = np.nan
-        y[trim] = np.nan
-        sd[trim] = np.nan
     # Use multiple processes for determining the correlations for performance
     args = [
         (row.sub, row.roi, np.where(~np.isnan(row.prf_x.get_data())))
@@ -194,7 +188,7 @@ if __name__ == '__main__':
         x = flatten(row.prf_x)
         y = flatten(row.prf_y)
         sd = flatten(row.prf_sd)
-        err = flatten(row.prf_err)
+        err = flatten(row.prf_err, mask=row.prf_x)
         r_vc_pupil = flatten(row.r_vc_pupil)
         r_vc_lc = flatten(row.r_vc_lc)
         sdm = DataMatrix(len(x))
@@ -203,11 +197,13 @@ if __name__ == '__main__':
         sdm.prf_x = FloatColumn
         sdm.prf_y = FloatColumn
         sdm.prf_sd = FloatColumn
+        sdm.prf_err = FloatColumn
         sdm.r_vc_pupil = r_vc_pupil
         sdm.r_vc_lc = r_vc_lc
         sdm.prf_x = x
         sdm.prf_y = y
         sdm.prf_sd = sd
+        sdm.prf_err = err
         ldm <<= sdm
     ldm.ecc = ((ldm.prf_x - PRF_XC) ** 2 + (ldm.prf_y - PRF_YC) ** 2) ** .5
     io.writetxt(ldm, 'outputs/longish-correlation-matrix.csv')
