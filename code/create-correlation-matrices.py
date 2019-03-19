@@ -20,7 +20,7 @@ PRF_Y_RANGE = 4, 124
 PRF_SD_RANGE = 1, 60
 CLEAN_IMG = True
 SMOOTHING = 4
-N_PROCESS = 1
+N_PROCESS = 6
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
 TRACE_SRC = 'inputs/traces/sub-{sub:02}/merged_timeseries_run-{run}.csv'
 
@@ -108,7 +108,6 @@ def do_subject(args):
 
     sub, roi, xyz = args
     rdm = DataMatrix(length=len(RUNS))
-
     rdm.r_vc_pupil = NiftiColumn
     rdm.r_vc_lc = NiftiColumn
     rdm.r_lc_pupil = FloatColumn
