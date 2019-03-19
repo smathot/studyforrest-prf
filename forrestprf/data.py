@@ -15,6 +15,7 @@ NIFTI_SRC = [
     'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapcon_run-1_bold.nii.gz',
     'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapexp_run-1_bold.nii.gz',
 ]
+SMOOTHING = 4
 ROI_OCCIPITAL = 5
 ROI_JUELICH = {
     'V1': (81, 82),
@@ -31,8 +32,13 @@ def subject_data(sub):
     sessions[90:180] = 2
     sessions[180:270] = 3
     sessions[270:] = 4
-    data = image.concat_imgs(src.format(sub=sub) for src in NIFTI_SRC)
-    return image.clean_img(data, sessions=sessions)
+    return image.smooth_img(
+        image.clean_img(
+            image.concat_imgs(src.format(sub=sub) for src in NIFTI_SRC),
+            sessions=sessions
+        ),
+        SMOOTHING
+    )
 
 
 def mni_atlas(roi):
