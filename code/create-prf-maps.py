@@ -36,13 +36,13 @@ def prf_map(sub_roi):
 
 
 def flatten(n, minval=-np.inf, maxval=np.inf):
-    
+
     a = n.get_data().flatten()
     return a[~np.isnan(a) & (a >= minval) & (a <= maxval)]
 
 
 if __name__ == '__main__':
-    
+
     with multiprocessing.Pool(N_PROCESS) as pool:
         maps = pool.map(prf_map, itertools.product(SUBJECTS, data.ROI_JUELICH))
     dm = DataMatrix()
