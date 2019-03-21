@@ -15,7 +15,7 @@ NIFTI_SRC = [
     'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapcon_run-1_bold.nii.gz',
     'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-retmapexp_run-1_bold.nii.gz',
 ]
-SMOOTHING = 4
+SMOOTHING = 6
 ROI_OCCIPITAL = 5
 ROI_JUELICH = {
     'V1': (81, 82),

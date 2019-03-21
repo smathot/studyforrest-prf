@@ -1,6 +1,6 @@
-# StudyForrest population-receptive-field mapping
+# The correlation between visual-cortex activity and pupil size
 
-Copyright 2018 Sebastiaan Mathôt (<https://www.cogsci.nl/smathot>)
+Copyright 2018 - 2019 Sebastiaan Mathôt (<https://www.cogsci.nl/smathot>)
 
 
 ## About
@@ -42,7 +42,21 @@ The data from StudyForrest is in a participant-specific space. `warp.sh` convert
 
 ## Step 3: PRF mapping
 
-See `code/prf-mapping.ipynb`.
+~~~
+python3 code/create-prf-maps.py
+~~~
+
+
+## Step 4: Correlation matrices
+
+~~~
+python3 code/create-correlation-matrices.py
+~~~
+
+
+### Step 5: Inspect the results
+
+Open `code\pupil-correlates.ipynb` in JupyterLab/ Jupyter Notebook.
 
 
 ## License

@@ -9,6 +9,7 @@ from scipy import signal
 import warnings
 from scipy.stats import linregress
 import multiprocessing
+from forrestprf import data
 
 
 DT = 2
@@ -19,7 +20,6 @@ PRF_X_RANGE = 4, 156
 PRF_Y_RANGE = 4, 124
 PRF_SD_RANGE = 1, 60
 CLEAN_IMG = True
-SMOOTHING = 4
 N_PROCESS = 6
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
 TRACE_SRC = 'inputs/traces/sub-{sub:02}/merged_timeseries_run-{run}.csv'
@@ -32,7 +32,7 @@ def get_avmovie_data(sub, run):
     if CLEAN_IMG:
         return image.smooth_img(
             image.clean_img(NIFTI_SRC.format(sub=sub, run=run)),
-            SMOOTHING
+            data.SMOOTHING
         )
     return image.load_img(NIFTI_SRC.format(sub=sub, run=run))
 
