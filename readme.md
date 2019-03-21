@@ -28,6 +28,7 @@ datalad get inputs/studyforrest-data-aligned/sub-*/in_bold3Tp2/sub-*_task-retmap
 datalad get inputs/studyforrest-data-templatetransforms/templates/grpbold3Tp2/brain.nii.gz
 datalad get inputs/studyforrest-data-templatetransforms/sub-*/bold3Tp2/in_grpbold3Tp2/subj2tmpl_warp.nii.gz
 datalad get inputs/studyforrest-data-phase2/stimuli/retinotopic_mapping/*.mkv
+datalad get inputs/studyforrest-data-phase2/sub-*/ses-movie/func/sub-*_ses-movie_task-movie_run-*_recording-eyegaze_physio.tsv.gz
 ~~~
 
 
