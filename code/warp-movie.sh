@@ -7,7 +7,7 @@ WARPED="inputs/studyforrest-data-mni/sub-%s/sub-%s_task-avmovie_run-%s_bold.nii.
 
 for SUB in "19" "20" # "01" "02" "03" "04" "05" "06" "09" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20"
 do
-   mkdir "inputs/studyforrest-data-mni/sub-$SUB"
+    mkdir "inputs/studyforrest-data-mni/sub-$SUB"
     for RUN in "1" "2" "3" "4" "5" "6" "7" "8"
     do
         datalad get "inputs/studyforrest-data-aligned/sub-$SUB/in_bold3Tp2/sub-"$SUB"_task-avmovie_run-"$RUN"_bold.nii.gz"

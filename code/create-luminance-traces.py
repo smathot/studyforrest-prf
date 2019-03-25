@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import itertools as it
+import multiprocessing
 import cv2
 import sys
 import numpy as np
@@ -14,8 +15,11 @@ from datamatrix import (
 
 SRC_VIDEO = 'inputs/videos/fg_av_ger_seg{}.mkv'
 SRC_EYEGAZE = 'inputs/studyforrest-data-phase2/sub-{subject:0>2}/ses-movie/func/sub-{subject:0>2}_ses-movie_task-movie_run-{run}_recording-eyegaze_physio.tsv.gz'
+DST = 'inputs/luminance-traces/sub-{subject:0>2}/run-{run}.csv'
 SUBJECTS = 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 17, 18, 19, 20
+RUNS = 1, 2, 3, 4, 5, 6, 7, 8
 MAX_FRAME = np.inf
+N_PROCESSES = 4
 
 
 @fnc.memoize(persistent=True)
@@ -50,7 +54,7 @@ def process_frame(run, frame, lm):
 
     dm = DataMatrix(length=len(SUBJECTS))
     dm.frame = frame
-    dm.subject = IntColumn
+    dm.sub = IntColumn
     dm.x = FloatColumn
     dm.y = FloatColumn
     dm.pupil = FloatColumn
@@ -73,6 +77,8 @@ def process_frame(run, frame, lm):
 
 
 def smoothing_kernel(size=30, px_per_deg=7):
+    
+    """Based on Mathôt et al. (2015 JEP:Gen)"""
 
     X0 = np.arange(-size//2, size//2)
     Y0 = np.arange(-size//2, size//2)
@@ -107,10 +113,10 @@ def process_video(run, start_frame=1):
             break
         dm <<= process_frame(run, frame, luminance_map(im, kernel))
     for sub, sdm in ops.split(dm.sub):
-        io.writetxt(
-            sdm,
-            'outputs/traces/sub-{subject:0>2}/run-{}.csv'.format(sub, run)
-        )
+        io.writetxt(sdm, DST.format(subject=sub, run=run))
 
 
-process_video(int(sys.argv[-1]))
+if __name__ == '__main__':
+    
+    with multiprocessing.Pool(N_PROCESSES) as p:
+        p.map(process_video, RUNS)

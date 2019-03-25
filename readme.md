@@ -37,20 +37,18 @@ datalad get inputs/studyforrest-data-phase2/sub-*/ses-movie/func/sub-*_ses-movie
 The data from StudyForrest is in a participant-specific space. `warp.sh` converts this data to MNI space, which is used by the rest of the scripts.
 
 ~~~
-./code/warp.sh
+./code/warp-retmap.sh
+./code/warp-movie.sh
 ~~~
 
 
-## Step 3: PRF mapping
+## Step 3: Prepare analyses
+
+The following scripts need to be executed in order. The will generate various intermediate files, which are stored in the `outputs` folder, and which are used by the analysis notebook.
 
 ~~~
 python3 code/create-prf-maps.py
-~~~
-
-
-## Step 4: Correlation matrices
-
-~~~
+python3 code/create-pupil-traces.py
 python3 code/create-correlation-matrices.py
 ~~~
 
