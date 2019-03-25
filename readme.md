@@ -52,13 +52,15 @@ The following scripts need to be executed in order. The will generate various in
 python3 code/create-prf-maps.py              # -> outputs/prf-matrix.pkl
 python3 code/create-luminance-traces.py      # -> inputs/luminance-traces/sub-*/run-*.csv
 python3 code/create-pupil-traces.py          # -> inputs/pupil-traces/sub-*/run-*.csv
-python3 code/create-correlation-matrices.py
+python3 code/create-correlation-matrices.py  # -> outputs/outputs/correlation-matrix.csv
+                                             #    outputs/correlation-matrix.pkl
+                                             #    outputs/longish-correlation-matrix.csv   
 ~~~
 
 
 ### Step 5: Inspect the results
 
-Open `code\pupil-correlates.ipynb` in JupyterLab/ Jupyter Notebook.
+Open `code\main-analysis.ipynb` in JupyterLab/ Jupyter Notebook.
 
 
 ## License
