@@ -22,7 +22,7 @@ PRF_SD_RANGE = 1, 60
 CLEAN_IMG = True
 N_PROCESS = 6
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
-TRACE_SRC = 'inputs/traces/sub-{sub:02}/merged_timeseries_run-{run}.csv'
+TRACE_SRC = 'inputs/pupil-traces/sub-{sub:02}/run-{run}.csv'
 
 
 def get_avmovie_data(sub, run):
@@ -50,13 +50,16 @@ def get_pupil_data(sub, run):
     )
 
 
-def get_lc_data(sub, run):
+def get_luminance_data(sub, run):
 
-    """Get a detrended LC trace for one subject and one avmovie run """
+    """Get a detrended luminance trace for one subject and one avmovie run """
 
-    dm = io.readtxt(TRACE_SRC.format(sub=sub, run=run))
     return signal.detrend(
-        srs._interpolate(dm.LC_l_nonconf + dm.LC_r_nonconf)
+        srs._interpolate(
+            io.readtxt(
+                TRACE_SRC.format(sub=sub, run=run)
+            ).luminance
+        )
     )
 
 
@@ -103,16 +106,16 @@ def flatten(nft, mask=None):
 def do_subject(args):
 
     """Determine per-voxel and average correlations between:
-    - VC <-> pupil size, LC
+    - VC <-> pupil size, luminance
     """
 
     sub, roi, xyz = args
     rdm = DataMatrix(length=len(RUNS))
     rdm.r_vc_pupil = NiftiColumn
-    rdm.r_vc_lc = NiftiColumn
-    rdm.r_lc_pupil = FloatColumn
+    rdm.r_vc_lum = NiftiColumn
+    rdm.r_lum_pupil = FloatColumn
     rdm.r_vcavg_pupil = FloatColumn
-    rdm.r_vcavg_lc = FloatColumn
+    rdm.r_vcavg_lum = FloatColumn
     rdm.sub = sub
     rdm.roi = roi
     for row, run in zip(rdm, RUNS):
@@ -126,20 +129,20 @@ def do_subject(args):
         )
         img = get_avmovie_data(sub, run)
         pupil_trace = get_pupil_data(sub, run)
-        lc_trace = get_lc_data(sub, run)
+        lum_trace = get_luminance_data(sub, run)
         # Per-voxel correlations
         row.r_vc_pupil = corr_img(img, pupil_trace, xyz, dt=DT)
-        row.r_vc_lc = corr_img(img, lc_trace, xyz, dt=0)
+        row.r_vc_lum = corr_img(img, lum_trace, xyz, dt=DT)
         # Per-ROI correlations
         voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
         avg = np.nanmean(voxels, axis=0)[:len(pupil_trace)]
         s, i, r, p, se = stats.linregress(avg[DT:], pupil_trace[:-DT])
         row['r_vcavg_pupil'] = r
-        s, i, r, p, se = stats.linregress(avg, lc_trace)
-        row['r_vcavg_lc'] = r
-        # Pupil-size LC correlation
-        s, i, r, p, se = stats.linregress(lc_trace[DT:], pupil_trace[:-DT])
-        row.r_lc_pupil = r
+        s, i, r, p, se = stats.linregress(avg, lum_trace)
+        row['r_vcavg_lum'] = r
+        # Pupil-size luminance correlation
+        s, i, r, p, se = stats.linregress(lum_trace, pupil_trace)
+        row.r_lum_pupil = r
     print('Done with sub: {}, roi: {}'.format(sub, roi))
     return rdm
 
@@ -160,24 +163,24 @@ if __name__ == '__main__':
             results = pool.map(do_subject, args)
     # Merge the correlation matrix and save it
     dm.r_vc_pupil = NiftiColumn
-    dm.r_vc_lc = NiftiColumn
-    dm.r_lc_pupil = FloatColumn
+    dm.r_vc_lum = NiftiColumn
+    dm.r_lum_pupil = FloatColumn
     dm.r_vcavg_pupil = FloatColumn
-    dm.r_vcavg_lc = FloatColumn
+    dm.r_vcavg_lum = FloatColumn
     for rdm in results:
         i = (dm.roi == rdm.roi[0]) & (dm.sub == rdm.sub[0])
         dm.r_vc_pupil[i] = rdm.r_vc_pupil.mean
-        dm.r_vc_lc[i] = rdm.r_vc_lc.mean
-        dm.r_lc_pupil[i] = rdm.r_lc_pupil.mean
+        dm.r_vc_lum[i] = rdm.r_vc_lum.mean
+        dm.r_lum_pupil[i] = rdm.r_lum_pupil.mean
         dm.r_vcavg_pupil[i] = rdm.r_vcavg_pupil.mean
-        dm.r_vcavg_lc[i] = rdm.r_vcavg_lc.mean
+        dm.r_vcavg_lum[i] = rdm.r_vcavg_lum.mean
     csvdm = dm[:]
     del csvdm.prf_err
     del csvdm.prf_sd
     del csvdm.prf_x
     del csvdm.prf_y
     del csvdm.r_vc_pupil
-    del csvdm.r_vc_lc
+    del csvdm.r_vc_lum
     io.writetxt(csvdm, 'outputs/correlation-matrix.csv')
     io.writepickle(dm, 'outputs/correlation-matrix.pkl')
     # Convert the correlation matrix to a longish format with one voxel per row
@@ -189,7 +192,7 @@ if __name__ == '__main__':
         sd = flatten(row.prf_sd)
         err = flatten(row.prf_err, mask=row.prf_x)
         r_vc_pupil = flatten(row.r_vc_pupil)
-        r_vc_lc = flatten(row.r_vc_lc)
+        r_vc_lum = flatten(row.r_vc_lum)
         sdm = DataMatrix(len(x))
         sdm.sub = row.sub
         sdm.roi = row.roi
@@ -198,7 +201,7 @@ if __name__ == '__main__':
         sdm.prf_sd = FloatColumn
         sdm.prf_err = FloatColumn
         sdm.r_vc_pupil = r_vc_pupil
-        sdm.r_vc_lc = r_vc_lc
+        sdm.r_vc_lum = r_vc_lum
         sdm.prf_x = x
         sdm.prf_y = y
         sdm.prf_sd = sd

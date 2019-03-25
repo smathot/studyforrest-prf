@@ -1,0 +1,105 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: fsldata
+Upstream-Contact: fsl@jiscmail.ac.uk
+Source-Location: http://www.fmrib.ox.ac.uk/fsldownloads/
+X-Autobuild: yes
+ This package is autobuildable by the Debian buildd network as it's license
+ imposes no restrictions on reproduction, modification, transmission or
+ transference as long as there is no financial return (see license below).
+
+
+Files: *
+Copyright: 1999-2010, The University of Oxford
+License: FSL
+ FMRIB Software Library, Release 4.1 (c) 1999-2010, The University of Oxford
+ (the "Software")
+ .
+ The Software remains the property of the University of Oxford ("the
+ University").
+ .
+ The Software is distributed "AS IS" under this Licence solely for
+ non-commercial use in the hope that it will be useful, but in order
+ that the University as a charitable foundation protects its assets for
+ the benefit of its educational and research purposes, the University
+ makes clear that no condition is made or to be implied, nor is any
+ warranty given or to be implied, as to the accuracy of the Software,
+ or that it will be suitable for any particular purpose or for use
+ under any specific conditions. Furthermore, the University disclaims
+ all responsibility for the use which is made of the Software. It
+ further disclaims any liability for the outcomes arising from using
+ the Software.
+ .
+ The Licensee agrees to indemnify the University and hold the
+ University harmless from and against any and all claims, damages and
+ liabilities asserted by third parties (including claims for
+ negligence) which arise directly or indirectly from the use of the
+ Software or the sale of any products based on the Software.
+ .
+ No part of the Software may be reproduced, modified, transmitted or
+ transferred in any form or by any means, electronic or mechanical,
+ without the express permission of the University. The permission of
+ the University is not required if the said reproduction, modification,
+ transmission or transference is done without financial return, the
+ conditions of this Licence are imposed upon the receiver of the
+ product, and all original and amended source code is included in any
+ transmitted product. You may be held legally responsible for any
+ copyright infringement that is caused or encouraged by your failure to
+ abide by these terms and conditions.
+ .
+ You are not permitted under this Licence to use this Software
+ commercially. Use for which any financial return is received shall be
+ defined as commercial use, and includes (1) integration of all or part
+ of the source code or the Software into a product for sale or license
+ by or on behalf of Licensee to third parties or (2) use of the
+ Software or any derivative of it for research with the final aim of
+ developing software products for sale or license to a third party or
+ (3) use of the Software or any derivative of it for research with the
+ final aim of developing non-software products for sale or license to a
+ third party, or (4) use of the Software to provide any service to an
+ external organisation for which payment is received. If you are
+ interested in using the Software commercially, please contact Isis
+ Innovation Limited ("Isis"), the technology transfer company of the
+ University, to negotiate a licence. Contact details are:
+ innovation@isis.ox.ac.uk quoting reference DE/1112.
+
+
+Files: data/atlases/Cerebellum*
+Copyright: 2009-2010, Jörn Diedrichsen
+License: FSL
+
+
+Files: data/atlases/HarvardOxford*
+Copyright: 2005-2010 Rahul Desikan
+License: FSL
+
+
+Files: data/atlases/JHU*
+Copyright: 2004-2010, Susmu Mori <susumu@mri.jhu.edu>
+License: FSL
+
+
+Files: data/atlases/Juelich*
+Copyright: 2005-2010, Simon Eickhoff <s.eickhoff@fz-juelich.de>
+License: FSL
+
+
+Files: data/atlases/MNI*
+Copyright: 2001, John Maziotta
+License: FSL
+
+
+Files: data/atlases/Talairach*
+Copyright: 2003-2010, Jack Lancaster and Peter Fox
+License: FSL
+
+
+Files: data/atlases/Thalamus*
+Copyright: 2003-2010, Tim Behrens <behrens@fmrib.ox.ac.uk>
+License: FSL
+
+Files: debian/*
+Copyright: 2007-2013, Michael Hanke <michael.hanke@gmail.com>
+		   2013, Yaroslav Halchenko <debian@onerussian.com>
+License: GPL-3
+ On Debian systems, the complete text of the GNU General
+ Public License can be found in `/usr/share/common-licenses/GPL-3'.

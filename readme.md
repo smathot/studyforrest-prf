@@ -31,6 +31,8 @@ datalad get inputs/studyforrest-data-phase2/stimuli/retinotopic_mapping/*.mkv
 datalad get inputs/studyforrest-data-phase2/sub-*/ses-movie/func/sub-*_ses-movie_task-movie_run-*_recording-eyegaze_physio.tsv.gz
 ~~~
 
+The folder `inputs/videos` should contain the video fragments of forrest gump as used during recording. These are available upon request from the maintainers of the Study Forrest project, but are not included in the repository due to copyright issues.
+
 
 ## Step 2: Transform fMRI data to MNI space
 
@@ -47,8 +49,9 @@ The data from StudyForrest is in a participant-specific space. `warp.sh` convert
 The following scripts need to be executed in order. The will generate various intermediate files, which are stored in the `outputs` folder, and which are used by the analysis notebook.
 
 ~~~
-python3 code/create-prf-maps.py
-python3 code/create-pupil-traces.py
+python3 code/create-prf-maps.py              # -> outputs/prf-matrix.pkl
+python3 code/create-luminance-traces.py      # -> inputs/luminance-traces/sub-*/run-*.csv
+python3 code/create-pupil-traces.py          # -> inputs/pupil-traces/sub-*/run-*.csv
 python3 code/create-correlation-matrices.py
 ~~~
 
