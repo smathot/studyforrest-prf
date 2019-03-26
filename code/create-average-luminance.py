@@ -3,14 +3,8 @@
 import itertools as it
 import multiprocessing
 import cv2
-import sys
 import numpy as np
 from scipy import signal, misc
-from datamatrix import (
-    functional as fnc,
-    operations as ops,
-    DataMatrix, FloatColumn, IntColumn, io
-)
 
 
 SRC_VIDEO = 'inputs/videos/fg_av_ger_seg{}.mkv'
