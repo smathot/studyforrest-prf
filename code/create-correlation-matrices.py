@@ -7,7 +7,6 @@ import nibabel as nib
 from nilearn import image
 from scipy import signal
 import warnings
-from scipy.stats import linregress
 import multiprocessing
 from forrestprf import data
 
@@ -16,13 +15,18 @@ DT = 2
 RUNS = 1, 2, 3, 4, 5, 6, 7, 8
 PRF_XC = 80
 PRF_YC = 64
-PRF_X_RANGE = 4, 156
-PRF_Y_RANGE = 4, 124
-PRF_SD_RANGE = 1, 60
 CLEAN_IMG = True
 N_PROCESS = 6
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
 TRACE_SRC = 'inputs/pupil-traces/sub-{sub:02}/run-{run}.csv'
+
+
+def nanregress(x, y):
+    
+    """Performs linear regression after removing nan data"""
+    
+    i = np.where(~np.isnan(x) & ~np.isnan(y))
+    return stats.linregress(x[i], y[i])
 
 
 def get_avmovie_data(sub, run):
@@ -73,11 +77,11 @@ def corr_img(img, pupil, xyz, dt=0):
     for x, y, z in zip(*xyz):
         bold = imgdat[x, y, z, :len(pupil)]
         if dt > 0:
-            s, i, r, p, se = linregress(bold[dt:], pupil[:-dt])
+            s, i, r, p, se = nanregress(bold[dt:], pupil[:-dt])
         elif dt < 0:
-            s, i, r, p, se = linregress(bold[:dt], pupil[-dt:])
+            s, i, r, p, se = nanregress(bold[:dt], pupil[-dt:])
         else:
-            s, i, r, p, se = linregress(bold, pupil)
+            s, i, r, p, se = nanregress(bold, pupil)
         pcor[x, y, z] = r
     return nib.Nifti2Image(pcor, img.affine)
 
@@ -136,12 +140,12 @@ def do_subject(args):
         # Per-ROI correlations
         voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
         avg = np.nanmean(voxels, axis=0)[:len(pupil_trace)]
-        s, i, r, p, se = stats.linregress(avg[DT:], pupil_trace[:-DT])
+        s, i, r, p, se = nanregress(avg[DT:], pupil_trace[:-DT])
         row['r_vcavg_pupil'] = r
-        s, i, r, p, se = stats.linregress(avg, lum_trace)
+        s, i, r, p, se = nanregress(avg, lum_trace)
         row['r_vcavg_lum'] = r
         # Pupil-size luminance correlation
-        s, i, r, p, se = stats.linregress(lum_trace, pupil_trace)
+        s, i, r, p, se = nanregress(lum_trace, pupil_trace)
         row.r_lum_pupil = r
     print('Done with sub: {}, roi: {}'.format(sub, roi))
     return rdm

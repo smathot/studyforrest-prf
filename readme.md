@@ -36,7 +36,7 @@ The folder `inputs/videos` should contain the video fragments of forrest gump as
 
 ## Step 2: Transform fMRI data to MNI space
 
-The data from StudyForrest is in a participant-specific space. `warp.sh` converts this data to MNI space, which is used by the rest of the scripts.
+The data from StudyForrest is in a participant-specific space. The scripts below convert this data to MNI space, which is what we will use for the rest of the scripts.
 
 ~~~
 ./code/warp-retmap.sh

@@ -67,12 +67,19 @@ def process_frame(run, frame, lm):
             _row = (_dm.frame == frame)[0]
         except IndexError:
             continue
-        row.x = min(1279, max(0, _row.x))
-        row.y = min(546, max(0, _row.y))
-        row.pupil = _row.pupil
         row.sub = sub
-        row.pupil = _row.pupil
-        row.luminance = lm[int(row.y), int(row.x)]
+        x = min(1279, max(0, _row.x))
+        y = min(546, max(0, _row.y))
+        if not x and not y:
+            row.x = np.nan
+            row.y = np.nan
+            row.pupil = np.nan
+            row.luminance = np.nan
+        else:
+            row.x = x
+            row.y = y
+            row.pupil = _row.pupil        
+            row.luminance = lm[int(row.y), int(row.x)]
     return dm
 
 
