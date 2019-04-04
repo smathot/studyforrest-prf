@@ -3,7 +3,6 @@
 import itertools as it
 import multiprocessing
 import cv2
-import sys
 import numpy as np
 from scipy import signal
 from datamatrix import (
@@ -50,7 +49,7 @@ def _get_subject_data(subject, run):
     return get_subject_data(subject, run)
 
 
-def process_frame(run, frame, lm):
+def process_frame(run, frame, lm, cm):
 
     dm = DataMatrix(length=len(SUBJECTS))
     dm.frame = frame
@@ -59,6 +58,7 @@ def process_frame(run, frame, lm):
     dm.y = FloatColumn
     dm.pupil = FloatColumn
     dm.luminance = FloatColumn
+    dm.change = FloatColumn
     print('Run {}, frame {}'.format(run, frame))
     for row, sub in zip(dm, SUBJECTS):
         _dm = _get_subject_data(sub, run)
@@ -75,20 +75,22 @@ def process_frame(run, frame, lm):
             row.y = np.nan
             row.pupil = np.nan
             row.luminance = np.nan
+            row.change = np.nan
         else:
             row.x = x
             row.y = y
-            row.pupil = _row.pupil        
-            row.luminance = lm[int(row.y), int(row.x)]
+            row.pupil = _row.pupil
+            row.luminance = lm[int(y), int(x)]
+            row.change = cm[int(y), int(x)]
     return dm
 
 
 def smoothing_kernel(size=30, px_per_deg=7):
-    
+
     """Based on Mathôt et al. (2015 JEP:Gen)"""
 
-    X0 = np.arange(-size//2, size//2)
-    Y0 = np.arange(-size//2, size//2)
+    X0 = np.arange(-size // 2, size // 2)
+    Y0 = np.arange(-size // 2, size // 2)
     Xm, Ym = np.meshgrid(X0, Y0)
     k = 33.2 + 10.6 * np.exp(
         -11.2 * (
@@ -108,22 +110,45 @@ def luminance_map(im, kernel):
     return signal.convolve2d(im.mean(axis=2), kernel)
 
 
+def change_map(im1, im2, kernel):
+
+    if im2 is None:
+        return np.zeros(im1.shape[:-1])
+    im1 = np.array(im1, dtype=np.int32)
+    im2 = np.array(im2, dtype=np.int32)
+    im_diff = np.abs(im1 - im2)
+    cm = (
+        signal.convolve2d(im_diff[:, :, 0], kernel) +
+        signal.convolve2d(im_diff[:, :, 1], kernel) +
+        signal.convolve2d(im_diff[:, :, 2], kernel)
+    )
+    return cm
+
+
 def process_video(run, start_frame=1):
 
     kernel = smoothing_kernel()
     cap = cv2.VideoCapture(SRC_VIDEO.format(run - 1))
     dm = DataMatrix()
+    im_prev = None
     for frame in it.count(start=start_frame):
         ret, im = cap.read()
         if not ret or frame >= MAX_FRAME:
             print('Done!')
             break
-        dm <<= process_frame(run, frame, luminance_map(im, kernel))
+        dm <<= process_frame(
+            run,
+            frame,
+            luminance_map(im, kernel),
+            change_map(im, im_prev, kernel)
+        )
+        im_prev = im
     for sub, sdm in ops.split(dm.sub):
         io.writetxt(sdm, DST.format(subject=sub, run=run))
 
 
 if __name__ == '__main__':
-    
+
+    process_video(1)
     with multiprocessing.Pool(N_PROCESSES) as p:
         p.map(process_video, RUNS)
