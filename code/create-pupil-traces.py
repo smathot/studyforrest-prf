@@ -16,15 +16,19 @@ RUNS = 1, 2, 3, 4, 5, 6, 7, 8
 N_PROCESSES = 4
 
 
-def luminance_timeseries(subject, run, frames):
+def video_timeseries(subject, run, frames):
 
     dm = io.readtxt(SRC_LUMINANCE.format(subject=subject, run=run))
     dm = dm.sub == subject
-    a = np.empty(frames.shape)
-    a[:] = np.nan
-    for i, row in enumerate(dm):
-        a[frames == row.frame] = row.luminance
-    return a
+    luminance = np.empty(frames.shape)
+    luminance[:] = np.nan
+    change = np.empty(frames.shape)
+    change[:] = np.nan    
+    for row in dm:
+        i = frames == row.frame
+        luminance[i] = row.luminance
+        change[i] = row.change
+    return luminance, change
 
 
 def merge_pupil(subject_run):
@@ -50,11 +54,16 @@ def merge_pupil(subject_run):
     pupil = srs.blinkreconstruct(pupil)
     pupil[pupil == 0] = np.nan
     print('\tgetting average luminance ...')
-    luminance = luminance_timeseries(subject=subject, run=run, frames=a[:, 3])
+    luminance, change = video_timeseries(
+        subject=subject,
+        run=run,
+        frames=a[:, 3]
+    )
     print('\tdownsampling ...')
     frame = a[:, 3]
     dm.pupil_size = srs.downsample(pupil, DOWNSAMPLE, fnc=np.nanmedian)
     dm.luminance = srs.downsample(luminance, DOWNSAMPLE, fnc=np.nanmedian)
+    dm.change = srs.downsample(change, DOWNSAMPLE, fnc=np.nanmedian)
     dm.sdgazex = srs.downsample(gazey, DOWNSAMPLE, fnc=np.nanstd)
     dm.sdgazey = srs.downsample(gazex, DOWNSAMPLE, fnc=np.nanstd)
     dm.start_frame = srs.downsample(frame, DOWNSAMPLE, fnc=np.nanmin)

@@ -149,6 +149,5 @@ def process_video(run, start_frame=1):
 
 if __name__ == '__main__':
 
-    process_video(1)
     with multiprocessing.Pool(N_PROCESSES) as p:
         p.map(process_video, RUNS)

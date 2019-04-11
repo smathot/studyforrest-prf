@@ -1,7 +1,7 @@
 # coding=utf-8
 
 import numpy as np
-from datamatrix import DataMatrix, io, NiftiColumn, FloatColumn, series as srs
+from datamatrix import DataMatrix, io, NiftiColumn, FloatColumn, series as srs, operations as ops
 from scipy import stats
 import nibabel as nib
 from nilearn import image
@@ -41,30 +41,14 @@ def get_avmovie_data(sub, run):
     return image.load_img(NIFTI_SRC.format(sub=sub, run=run))
 
 
-def get_pupil_data(sub, run):
+def get_series_data(sub, run, col):
 
     """Get a detrended pupil trace for one subject and one avmovie run """
 
-    return signal.detrend(
-        srs._interpolate(
-            io.readtxt(
-                TRACE_SRC.format(sub=sub, run=run)
-            ).pupil_size
-        )
-    )
-
-
-def get_luminance_data(sub, run):
-
-    """Get a detrended luminance trace for one subject and one avmovie run """
-
-    return signal.detrend(
-        srs._interpolate(
-            io.readtxt(
-                TRACE_SRC.format(sub=sub, run=run)
-            ).luminance
-        )
-    )
+    dm = io.readtxt(TRACE_SRC.format(sub=sub, run=run))
+    dm = ops.auto_type(dm)
+    dm[col] @= lambda i: np.nan if i == 0 else i
+    return signal.detrend(srs._interpolate(dm[col]))
 
 
 def corr_img(img, pupil, xyz, dt=0):
@@ -117,9 +101,13 @@ def do_subject(args):
     rdm = DataMatrix(length=len(RUNS))
     rdm.r_vc_pupil = NiftiColumn
     rdm.r_vc_lum = NiftiColumn
+    rdm.r_vc_change = NiftiColumn
     rdm.r_lum_pupil = FloatColumn
+    rdm.r_lum_change = FloatColumn
+    rdm.r_change_pupil = FloatColumn
     rdm.r_vcavg_pupil = FloatColumn
     rdm.r_vcavg_lum = FloatColumn
+    rdm.r_vcavg_change = FloatColumn
     rdm.sub = sub
     rdm.roi = roi
     for row, run in zip(rdm, RUNS):
@@ -132,21 +120,29 @@ def do_subject(args):
             )
         )
         img = get_avmovie_data(sub, run)
-        pupil_trace = get_pupil_data(sub, run)
-        lum_trace = get_luminance_data(sub, run)
+        pupil_trace = get_series_data(sub, run, 'pupil_size')
+        lum_trace = get_series_data(sub, run, 'luminance')
+        change_trace = get_series_data(sub, run, 'change')
         # Per-voxel correlations
         row.r_vc_pupil = corr_img(img, pupil_trace, xyz, dt=DT)
         row.r_vc_lum = corr_img(img, lum_trace, xyz, dt=DT)
+        row.r_vc_change = corr_img(img, change_trace, xyz, dt=DT)
         # Per-ROI correlations
         voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
         avg = np.nanmean(voxels, axis=0)[:len(pupil_trace)]
         s, i, r, p, se = nanregress(avg[DT:], pupil_trace[:-DT])
         row['r_vcavg_pupil'] = r
-        s, i, r, p, se = nanregress(avg, lum_trace)
+        s, i, r, p, se = nanregress(avg[DT:], lum_trace[:-DT])
         row['r_vcavg_lum'] = r
-        # Pupil-size luminance correlation
+        s, i, r, p, se = nanregress(avg[DT:], change_trace[:-DT])
+        row['r_vcavg_change'] = r
+        # Between-series correlations
         s, i, r, p, se = nanregress(lum_trace, pupil_trace)
         row.r_lum_pupil = r
+        s, i, r, p, se = nanregress(lum_trace, change_trace)
+        row.r_lum_change = r
+        s, i, r, p, se = nanregress(change_trace, pupil_trace)
+        row.r_change_pupil = r
     print('Done with sub: {}, roi: {}'.format(sub, roi))
     return rdm
 
@@ -168,16 +164,24 @@ if __name__ == '__main__':
     # Merge the correlation matrix and save it
     dm.r_vc_pupil = NiftiColumn
     dm.r_vc_lum = NiftiColumn
+    dm.r_vc_change = NiftiColumn
     dm.r_lum_pupil = FloatColumn
+    dm.r_lum_change = FloatColumn
+    dm.r_change_pupil = FloatColumn
     dm.r_vcavg_pupil = FloatColumn
     dm.r_vcavg_lum = FloatColumn
+    dm.r_vcavg_change = FloatColumn
     for rdm in results:
         i = (dm.roi == rdm.roi[0]) & (dm.sub == rdm.sub[0])
         dm.r_vc_pupil[i] = rdm.r_vc_pupil.mean
         dm.r_vc_lum[i] = rdm.r_vc_lum.mean
+        dm.r_vc_change[i] = rdm.r_vc_change.mean
         dm.r_lum_pupil[i] = rdm.r_lum_pupil.mean
+        dm.r_lum_change[i] = rdm.r_lum_change.mean
+        dm.r_change_pupil[i] = rdm.r_change_pupil.mean
         dm.r_vcavg_pupil[i] = rdm.r_vcavg_pupil.mean
         dm.r_vcavg_lum[i] = rdm.r_vcavg_lum.mean
+        dm.r_vcavg_change[i] = rdm.r_vcavg_change.mean
     csvdm = dm[:]
     del csvdm.prf_err
     del csvdm.prf_sd
@@ -185,6 +189,7 @@ if __name__ == '__main__':
     del csvdm.prf_y
     del csvdm.r_vc_pupil
     del csvdm.r_vc_lum
+    del csvdm.r_vc_change
     io.writetxt(csvdm, 'outputs/correlation-matrix.csv')
     io.writepickle(dm, 'outputs/correlation-matrix.pkl')
     # Convert the correlation matrix to a longish format with one voxel per row
@@ -197,6 +202,7 @@ if __name__ == '__main__':
         err = flatten(row.prf_err, mask=row.prf_x)
         r_vc_pupil = flatten(row.r_vc_pupil)
         r_vc_lum = flatten(row.r_vc_lum)
+        r_vc_change = flatten(row.r_vc_change)
         sdm = DataMatrix(len(x))
         sdm.sub = row.sub
         sdm.roi = row.roi
@@ -206,6 +212,7 @@ if __name__ == '__main__':
         sdm.prf_err = FloatColumn
         sdm.r_vc_pupil = r_vc_pupil
         sdm.r_vc_lum = r_vc_lum
+        sdm.r_vc_change = r_vc_change
         sdm.prf_x = x
         sdm.prf_y = y
         sdm.prf_sd = sd
