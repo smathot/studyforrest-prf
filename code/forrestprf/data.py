@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 
+import os
 import numpy as np
 import nibabel as nib
 from nilearn import image
@@ -24,6 +25,15 @@ ROI_JUELICH = {
     'V4': (87, 88),
     'LGN': (103, 104)
 }
+# In case `code` is the working directory
+if not os.path.isdir(os.path.dirname(MNI_ATLAS)):
+    MNI_ATLAS = os.path.join('..', MNI_ATLAS)
+    JUELICH_ATLAS = os.path.join('..', JUELICH_ATLAS)
+    FORREST_BRAIN = os.path.join('..', FORREST_BRAIN)
+    NIFTI_SRC = [
+        os.path.join('..', path)
+        for path in NIFTI_SRC
+    ]
 
 
 def subject_data(sub):

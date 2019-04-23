@@ -3,6 +3,7 @@
 
 import cv2
 import numpy as np
+import os
 from datamatrix import functional as fnc
 
 
@@ -13,6 +14,9 @@ STIM_WIDTH = 1280
 STIM_HEIGHT = 1024
 STIM_BG = 47
 VIDEO_SRC = 'inputs/studyforrest-data-phase2/stimuli/retinotopic_mapping/{}.mkv'
+# In case `code` is the working directory
+if not os.path.isdir(os.path.dirname(VIDEO_SRC)):
+    VIDEO_SRC = os.path.join('..', VIDEO_SRC)
 
 
 def video_to_stim(src, downsample):

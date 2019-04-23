@@ -7,9 +7,12 @@ from nipy.modalities.fmri.hrf import spmt
 from forrestprf import stimulus
 
 
-PREDICTION_CACHE = 'inputs/bold-predictions/{w}-{h}/{x}-{y}-{sd}.npy'
+PREDICTION_CACHE = 'inputs/bold-predictions/{w}-{h}/{l}-{x}-{y}-{sd}.npy'
 HRF = spmt(np.linspace(0, 18, 10))
 _prediction_cache = {}
+# In case `code` is the working directory
+if not os.path.isdir(os.path.dirname(PREDICTION_CACHE)):
+    PREDICTION_CACHE = os.path.join('..', PREDICTION_CACHE)
 
 
 def prf(x, y, sd, shape):
@@ -29,8 +32,9 @@ def bold_prediction(x, y, sd, stim, hrf=True, norm=True):
         x=x,
         y=y,
         sd=sd,
+        l=stim.shape[0],
         h=stim.shape[1],
-        w=stim.shape[2]
+        w=stim.shape[2],        
     )
     if hrf and norm:
         if path in _prediction_cache:
