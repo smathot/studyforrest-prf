@@ -11,8 +11,9 @@ PREDICTION_CACHE = 'inputs/bold-predictions/{w}-{h}/{l}-{x}-{y}-{sd}.npy'
 HRF = spmt(np.linspace(0, 18, 10))
 _prediction_cache = {}
 # In case `code` is the working directory
-if not os.path.isdir(os.path.dirname(PREDICTION_CACHE)):
+if not os.path.isdir('inputs/bold-predictions'):
     PREDICTION_CACHE = os.path.join('..', PREDICTION_CACHE)
+print('Prediction cache: {}'.format(PREDICTION_CACHE))
 
 
 def prf(x, y, sd, shape):
