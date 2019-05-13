@@ -40,10 +40,11 @@ NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie
 MCPARAMS = 'inputs/studyforrest-data-aligned/sub-{sub:02}/in_bold3Tp2/sub-{sub:02}_task-avmovie_run-{run}_bold_mcparams.txt'
 TRACE_SRC = 'inputs/pupil-traces/sub-{sub:02}/run-{run}.csv'
 LC_ATLAS = 'inputs/mni-lc-atlas/lc-atlas-12.5.nii.gz'
+FULL_BRAIN = 'inputs/full-brain-mask.nii.gz'
 FORNIX_ROI = 100, 100
 LGN_ROI = 103, 104
 BROCA_ROI = 13, 14
-CONTROL_ROI = BROCA_ROI
+CONTROL_ROI = 98, 99
 SKIP_FIRST = 3  # First samples of the bold signal to ignore
 X = np.linspace(0, 20, 10)
 HRF = spmt(X)  # Hemodynamic response function
@@ -54,6 +55,7 @@ FORMULA_BOLD_AROUSAL = 'bold ~ arousal + rot_1 + rot_2 + rot_3 + trans_x + trans
 FORMULA_PUPIL_AROUSAL = 'pupil ~ arousal'
 FORMULA_TRACE = 'bold ~ trace + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
 CONTROL = '--control' in sys.argv  # If set to True
+FULLBRAIN = '--fullbrain' in sys.argv  # If set to True
 SRC_EMOTION = 'inputs/ioats_2s_av_allchar.csv'
 EMOTION_SEGMENTATION = [
     (0, 902),
@@ -65,16 +67,14 @@ EMOTION_SEGMENTATION = [
     (5342, 6426),
     (6410, 7086)
 ]
+assert(not CONTROL or not FULLBRAIN)
 
 
 def flt(s):
     
     """Basic filtering that is applied to all signals"""
     
-    return srs.filter_highpass(
-        signal.detrend(s),
-        len(s) / 64
-    )
+    return srs.filter_highpass(s, len(s) / 64)
 
 
 def deconv_hrf(s):
@@ -164,21 +164,17 @@ def corr_img(img, trace, mcparams, xyz, deconv_bold):
     pcor = np.empty(img.shape[:-1])
     pcor[:] = np.nan
     imgdat = img.get_data()
+    dm = mcparams[SKIP_FIRST:len(trace)]
+    dm.bold = FloatColumn
+    dm.trace = FloatColumn
+    dm.trace = trace[SKIP_FIRST:]
+    df = cnv.to_pandas(dm)    
     for x, y, z in zip(*xyz):
-        bold = flt(imgdat[x, y, z])
+        df.bold = flt(imgdat[x, y, z])[SKIP_FIRST:len(trace)]
         if deconv_bold:
-            bold = deconv_prf(bold)
-        if MULTIREGRESS:
-            dm = mcparams[SKIP_FIRST:len(trace)]
-            dm.bold = FloatColumn
-            dm.bold = bold[SKIP_FIRST:len(trace)]
-            dm.trace = FloatColumn
-            dm.trace = trace[SKIP_FIRST:]
-            results = smf.ols(FORMULA_TRACE, dm).fit()
-            pcor[x, y, z] = results.tvalues[1]
-        else:
-            s, i, r, p, se = nanregress(bold, pupil)
-            pcor[x, y, z] = r
+            df.bold = deconv_prf(df.bold)
+        results = smf.ols(FORMULA_TRACE, df).fit()
+        pcor[x, y, z] = results.tvalues[1]
     return nib.Nifti2Image(pcor, img.affine)
 
 
@@ -190,6 +186,8 @@ def do_subject(sub):
 
     if CONTROL:
         mask = data.juelich_mask(CONTROL_ROI)
+    elif FULLBRAIN:
+        mask = image.load_img(FULL_BRAIN)
     else:
         mask = image.load_img(LC_ATLAS)    
     xyz = np.where(mask.get_data() != 0)    
@@ -219,32 +217,29 @@ def do_subject(sub):
         # Per-ROI correlations
         voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
         avg = np.nanmean(voxels, axis=0)
-        if MULTIREGRESS:            
-            dm = mcparams[SKIP_FIRST:len(pupil_trace)]
-            dm.bold = FloatColumn
-            dm.bold = avg[SKIP_FIRST:len(pupil_trace)]
-            dm.pupil = FloatColumn
-            dm.pupil = pupil_trace[SKIP_FIRST:]
-            dm.arousal = FloatColumn
-            dm.arousal = arousal_trace[SKIP_FIRST:len(pupil_trace)]
-            # Bold ~ pupil
-            results = smf.ols(FORMULA_BOLD_PUPIL, data=dm).fit()     
-            t = results.tvalues[1]
-            print('t(bold ~ pupil) = {:.4f}'.format(t))
-            row.t_vcavg_pupil = t
-            # Bold ~ arousal
-            results = smf.ols(FORMULA_BOLD_AROUSAL, data=dm).fit()     
-            t = results.tvalues[1]
-            print('t(bold ~ arousal) = {:.4f}'.format(t))
-            row.t_vcavg_arousal = t
-            # Pupil ~ arousal
-            results = smf.ols(FORMULA_PUPIL_AROUSAL, data=dm).fit()     
-            t = results.tvalues[1]
-            print('t(pupil ~ arousal) = {:.4f}'.format(t))
-            row.t_pupil_arousal = t
-        else:
-            s, i, r, p, se = nanregress(deconv_prf(flt(avg)), pupil_trace)
-            row.t_vcavg_pupil = r
+        dm = mcparams[SKIP_FIRST:len(pupil_trace)]
+        dm.bold = FloatColumn
+        dm.bold = avg[SKIP_FIRST:len(pupil_trace)]
+        dm.pupil = FloatColumn
+        dm.pupil = pupil_trace[SKIP_FIRST:]
+        dm.arousal = FloatColumn
+        dm.arousal = arousal_trace[SKIP_FIRST:len(pupil_trace)]
+        df = cnv.to_pandas(dm)
+        # Bold ~ pupil
+        results = smf.ols(FORMULA_BOLD_PUPIL, data=df).fit()     
+        t = results.tvalues[1]
+        print('t(bold ~ pupil) = {:.4f}'.format(t))
+        row.t_vcavg_pupil = t
+        # Bold ~ arousal
+        results = smf.ols(FORMULA_BOLD_AROUSAL, data=df).fit()     
+        t = results.tvalues[1]
+        print('t(bold ~ arousal) = {:.4f}'.format(t))
+        row.t_vcavg_arousal = t
+        # Pupil ~ arousal
+        results = smf.ols(FORMULA_PUPIL_AROUSAL, data=df).fit()     
+        t = results.tvalues[1]
+        print('t(pupil ~ arousal) = {:.4f}'.format(t))
+        row.t_pupil_arousal = t
         row.run = run
     print('Done with sub: {}'.format(sub))
     return rdm
@@ -252,9 +247,17 @@ def do_subject(sub):
 
 if __name__ == '__main__':
 
+    if CONTROL:
+        print('Analyzing control ROI')
+    elif FULLBRAIN:
+        print('Analyzing full brain')
+    else:
+        print('Analyzing LC')
     if N_PROCESS == 1:
+        print('Using single process')
         results = map(do_subject, SUBJECTS)
     else:
+        print('Using {} processes'.format(N_PROCESS))
         with multiprocessing.Pool(N_PROCESS) as pool:
             results = pool.map(do_subject, SUBJECTS)
     dm = DataMatrix()
@@ -262,5 +265,7 @@ if __name__ == '__main__':
         dm <<= rdm
     if CONTROL:
         io.writepickle(dm, 'outputs/lc-correlation-matrix-control.pkl')
+    elif FULLBRAIN:
+        io.writepickle(dm, 'outputs/lc-correlation-matrix-fullbrain.pkl')
     else:
         io.writepickle(dm, 'outputs/lc-correlation-matrix.pkl')
