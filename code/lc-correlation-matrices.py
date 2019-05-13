@@ -22,6 +22,8 @@ import warnings
 import multiprocessing
 from forrestprf import data
 import statsmodels.formula.api as smf
+#from statsmodels.formula import formulatools
+#formulatools.dmatrices = fnc.memoize(formulatools.dmatrices)
 
 
 def prf(t):
@@ -34,7 +36,6 @@ RUNS = 1, 2, 3, 4, 5, 6, 7, 8
 SUBJECTS = 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16 ,17, 18, 19, 20
 PRF_XC = 80
 PRF_YC = 64
-CLEAN_IMG = True
 N_PROCESS = 1 if '--single-process' in sys.argv else 6
 NIFTI_SRC = 'inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
 MCPARAMS = 'inputs/studyforrest-data-aligned/sub-{sub:02}/in_bold3Tp2/sub-{sub:02}_task-avmovie_run-{run}_bold_mcparams.txt'
@@ -56,6 +57,7 @@ FORMULA_PUPIL_AROUSAL = 'pupil ~ arousal'
 FORMULA_TRACE = 'bold ~ trace + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
 CONTROL = '--control' in sys.argv  # If set to True
 FULLBRAIN = '--fullbrain' in sys.argv  # If set to True
+DOWNSAMPLE = '--downsample' in sys.argv  # If set to True
 SRC_EMOTION = 'inputs/ioats_2s_av_allchar.csv'
 EMOTION_SEGMENTATION = [
     (0, 902),
@@ -105,12 +107,11 @@ def get_avmovie_data(sub, run):
 
     """Get a clean nifti image for one subject and one avmovie run"""
 
-    if CLEAN_IMG:
-        return image.smooth_img(
-            image.clean_img(NIFTI_SRC.format(sub=sub, run=run)),
-            data.SMOOTHING
-        )
-    return image.load_img(NIFTI_SRC.format(sub=sub, run=run))
+    src = NIFTI_SRC.format(sub=sub, run=run)
+    print('Reading {}'.format(src))
+    nft = image.smooth_img( image.clean_img(src), data.SMOOTHING)
+    print('Done')
+    return nft
 
 
 def get_mcparams(sub, run):
@@ -169,12 +170,18 @@ def corr_img(img, trace, mcparams, xyz, deconv_bold):
     dm.trace = FloatColumn
     dm.trace = trace[SKIP_FIRST:]
     df = cnv.to_pandas(dm)    
-    for x, y, z in zip(*xyz):
+    for i, (x, y, z) in enumerate(zip(*xyz)):
+        if DOWNSAMPLE and (x % 2 or y % 2 or z % 2):
+            continue
+        if i and not i % 10000:
+            print('cycle: {}'.format(i))
         df.bold = flt(imgdat[x, y, z])[SKIP_FIRST:len(trace)]
         if deconv_bold:
             df.bold = deconv_prf(df.bold)
         results = smf.ols(FORMULA_TRACE, df).fit()
         pcor[x, y, z] = results.tvalues[1]
+        if DOWNSAMPLE:
+            pcor[x + 1, y + 1, z + 1] = results.tvalues[1]
     return nib.Nifti2Image(pcor, img.affine)
 
 
@@ -211,7 +218,8 @@ def do_subject(sub):
         pupil_trace = get_pupil_data(sub, run)
         arousal_trace = get_arousal_data(run)
         mcparams = get_mcparams(sub, run)
-        # Per-voxel correlations
+        # Per-voxel correlationsx, y, z
+        #with fnc.profile():
         row.t_vc_pupil = corr_img(img, pupil_trace, mcparams, xyz, deconv_bold=True)
         row.t_vc_arousal = corr_img(img, arousal_trace, mcparams, xyz, deconv_bold=False)
         # Per-ROI correlations
