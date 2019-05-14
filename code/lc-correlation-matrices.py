@@ -171,10 +171,10 @@ def corr_img(img, trace, mcparams, xyz, deconv_bold):
     dm.trace = trace[SKIP_FIRST:]
     df = cnv.to_pandas(dm)    
     for i, (x, y, z) in enumerate(zip(*xyz)):
+        if i and not i % 10000:
+            print('cycle: {}'.format(i))        
         if DOWNSAMPLE and (x % 2 or y % 2 or z % 2):
             continue
-        if i and not i % 10000:
-            print('cycle: {}'.format(i))
         df.bold = flt(imgdat[x, y, z])[SKIP_FIRST:len(trace)]
         if deconv_bold:
             df.bold = deconv_prf(df.bold)
