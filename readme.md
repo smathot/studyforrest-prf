@@ -24,7 +24,8 @@ This code has been developed on Ubuntu 18.04 with FSL 5.0 installed through Neur
 ## Step 1: Get input data files from StudyForrest
 
 ~~~
-datalad get inputs/studyforrest-data-aligned/sub-*/in_bold3Tp2/sub-*_task-retmap*_run-1_bold.nii.gz
+datalad get inputs/studyforrest-data-aligned/sub-*/in_bold3Tp2/sub-*_task-retmap*_run-*_bold.nii.gz
+datalad get inputs/studyforrest-data-aligned/sub-*/in_bold3Tp2/sub-*_task-avmovie_run-*_bold_mcparams.txt
 datalad get inputs/studyforrest-data-templatetransforms/templates/grpbold3Tp2/brain.nii.gz
 datalad get inputs/studyforrest-data-templatetransforms/sub-*/bold3Tp2/in_grpbold3Tp2/subj2tmpl_warp.nii.gz
 datalad get inputs/studyforrest-data-phase2/stimuli/retinotopic_mapping/*.mkv
