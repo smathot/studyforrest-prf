@@ -6,8 +6,11 @@ try:
 except ImportError:
     from scipy import misc, special
     misc.factorial = special.factorial
+else:
+    from scipy import misc
 
 import sys
+import itertools
 import numpy as np
 from datamatrix import (
     DataMatrix,
@@ -34,8 +37,10 @@ def prf(t):
     return t ** 10.1 * np.exp(-10.1 * t / 930)
 
 
-RUNS = 1, 2, 3, 4, 5, 6, 7, 8
-SUBJECTS = 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 17, 18, 19, 20
+RUNS = (1,) if '--test' in sys.argv else (1, 2, 3, 4, 5, 6, 7, 8)
+SUBJECTS = (1, ) if '--test' in sys.argv else (
+    1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 17, 18, 19, 20
+)
 PRF_XC = 80
 PRF_YC = 64
 N_PROCESS = 1 if '--single-process' in sys.argv else 6
@@ -54,14 +59,14 @@ HRF = spmt(X)  # Hemodynamic response function
 PRF = prf(X)  # Pupil response function
 MULTIREGRESS = True
 REMOVE_LUMINANCE_FROM_PUPIL = '--remove-luminance' in sys.argv
-FORMULA_BOLD_PUPIL = 'bold ~ pupil + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
-FORMULA_BOLD_AROUSAL = 'bold ~ arousal + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
-FORMULA_PUPIL_AROUSAL = 'pupil ~ arousal'
-FORMULA_TRACE = 'bold ~ trace + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
+FORMULA_BOLD_TRACE = 'bold ~ {} + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
+FORMULA_TRACE_TRACE = '{} ~ {}'
+FORMULA_VOXEL_TRACE = 'bold ~ trace + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
 CONTROL = '--control' in sys.argv  # If set to True
 FULLBRAIN = '--fullbrain' in sys.argv  # If set to True
 DOWNSAMPLE = '--downsample' in sys.argv  # If set to True
 SRC_EMOTION = '../inputs/ioats_2s_av_allchar.csv'
+TRACES = 'pupil', 'arousal', 'luminance', 'change'  # All the timeseries
 EMOTION_SEGMENTATION = [
     (0, 902),
     (886, 1768),
@@ -132,6 +137,31 @@ def get_mcparams(sub, run):
     return dm
 
 
+def get_trace_data(sub, run, tracename):
+
+    """A generic function to get a simple trace."""
+
+    dm = io.readtxt(TRACE_SRC.format(sub=sub, run=run))
+    dm = ops.auto_type(dm)
+    dm[tracename] @= lambda i: np.nan if i == 0 else i
+    dm[tracename] = srs._interpolate(ops.z(dm[tracename]))
+    return deconv_hrf(flt(dm[tracename]))
+
+
+def get_luminance_data(sub, run):
+
+    """Gets a luminance trace for a given run and subject."""
+
+    return get_trace_data(sub, run, 'luminance')
+
+
+def get_change_data(sub, run):
+
+    """Gets a visual-change trace for a given run and subject."""
+
+    return get_trace_data(sub, run, 'change')
+
+
 @fnc.memoize
 def get_arousal_data(run):
 
@@ -182,7 +212,7 @@ def corr_img(img, trace, mcparams, xyz, deconv_bold):
         df.bold = flt(imgdat[x, y, z])[SKIP_FIRST:len(trace)]
         if deconv_bold:
             df.bold = deconv_prf(df.bold)
-        results = smf.ols(FORMULA_TRACE, df).fit()
+        results = smf.ols(FORMULA_VOXEL_TRACE, df).fit()
         pcor[x, y, z] = results.tvalues[1]
         if DOWNSAMPLE:
             pcor[x + 1, y + 1, z + 1] = results.tvalues[1]
@@ -203,11 +233,18 @@ def do_subject(sub):
         mask = image.load_img(LC_ATLAS)
     xyz = np.where(mask.get_data() != 0)
     rdm = DataMatrix(length=len(RUNS))
-    rdm.t_vc_pupil = NiftiColumn
-    rdm.t_vcavg_pupil = FloatColumn
-    rdm.t_vc_arousal = NiftiColumn
-    rdm.t_vcavg_arousal = FloatColumn
-    rdm.t_pupil_arousal = FloatColumn
+    # First create empty columns to be filled later.
+    # Each series will be correlated with the bold signal in two ways:
+    # - for individual voxels
+    # - for the average bold activity
+    for trace in TRACES:
+        rdm['t_bold_{}'.format(trace)] = NiftiColumn
+        rdm['t_boldavg_{}'.format(trace)] = FloatColumn
+    # Each trace is also compared to each other trace (but not itself)
+    for tracename1, tracename2 in itertools.product(TRACES, TRACES):
+        if tracename1 < tracename2:
+            continue
+        rdm['t_{}_{}'.format(tracename1, tracename2)] = FloatColumn
     rdm.sub = sub
     rdm.run = -1
     for row, run in zip(rdm, RUNS):
@@ -219,50 +256,56 @@ def do_subject(sub):
             )
         )
         img = get_avmovie_data(sub, run)
-        pupil_trace = get_pupil_data(sub, run)
-        arousal_trace = get_arousal_data(run)
+        traces = {
+            'pupil': get_pupil_data(sub, run),
+            'arousal': get_arousal_data(run),  # doesn't depend on subject
+            'luminance': get_luminance_data(sub, run),
+            'change': get_change_data(sub, run)
+        }
         mcparams = get_mcparams(sub, run)
         # Per-voxel correlationsx, y, z
-        row.t_vc_pupil = corr_img(
-            img,
-            pupil_trace,
-            mcparams,
-            xyz,
-            deconv_bold=True
-        )
-        row.t_vc_arousal = corr_img(
-            img,
-            arousal_trace,
-            mcparams,
-            xyz,
-            deconv_bold=False
-        )
+        for tracename, trace in traces.items():
+            row['t_bold_{}'.format(tracename)] = corr_img(
+                img,
+                trace,
+                mcparams,
+                xyz,
+                deconv_bold=tracename == 'pupil'  # PRF deconvolution
+            )
         # Per-ROI correlations
         voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
         avg = np.nanmean(voxels, axis=0)
-        dm = mcparams[SKIP_FIRST:len(pupil_trace)]
+        # Create a DataFrame with equally long traces, also including the
+        # average bold value
+        trace_len = min(len(trace) for trace in traces.values())
+        print('trace length: {}'.format(trace_len))
+        dm = mcparams[SKIP_FIRST:trace_len]
         dm.bold = FloatColumn
-        dm.bold = avg[SKIP_FIRST:len(pupil_trace)]
-        dm.pupil = FloatColumn
-        dm.pupil = pupil_trace[SKIP_FIRST:]
-        dm.arousal = FloatColumn
-        dm.arousal = arousal_trace[SKIP_FIRST:len(pupil_trace)]
+        dm.bold = avg[SKIP_FIRST:trace_len]
+        for tracename, trace in traces.items():
+            dm[tracename] = FloatColumn
+            dm[tracename] = trace[SKIP_FIRST:trace_len]
         df = cnv.to_pandas(dm)
-        # Bold ~ pupil
-        results = smf.ols(FORMULA_BOLD_PUPIL, data=df).fit()
-        t = results.tvalues[1]
-        print('t(bold ~ pupil) = {:.4f}'.format(t))
-        row.t_vcavg_pupil = t
-        # Bold ~ arousal
-        results = smf.ols(FORMULA_BOLD_AROUSAL, data=df).fit()
-        t = results.tvalues[1]
-        print('t(bold ~ arousal) = {:.4f}'.format(t))
-        row.t_vcavg_arousal = t
-        # Pupil ~ arousal
-        results = smf.ols(FORMULA_PUPIL_AROUSAL, data=df).fit()
-        t = results.tvalues[1]
-        print('t(pupil ~ arousal) = {:.4f}'.format(t))
-        row.t_pupil_arousal = t
+        # Correlate each trace with the average bold signal
+        for tracename in traces:
+            results = smf.ols(
+                FORMULA_BOLD_TRACE.format(tracename),
+                data=df
+            ).fit()
+            t = results.tvalues[1]
+            print('t(boldavg ~ {}) = {:.4f}'.format(tracename, t))
+            row['t_boldavg_{}'.format(tracename)] = t
+        # Correlate each trace with each other trace
+        for tracename1, tracename2 in itertools.product(TRACES, TRACES):
+            if tracename1 < tracename2:
+                continue
+            results = smf.ols(
+                FORMULA_TRACE_TRACE.format(tracename1, tracename2),
+                data=df
+            ).fit()
+            t = results.tvalues[1]
+            print('t({} ~ {}) = {:.4f}'.format(tracename1, tracename2, t))
+            row['t_{}_{}'.format(tracename1, tracename2)] = t
         row.run = run
     print('Done with sub: {}'.format(sub))
     return rdm
