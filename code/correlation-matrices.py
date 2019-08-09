@@ -9,7 +9,6 @@ except ImportError:
 else:
     from scipy import misc
 
-import sys
 import itertools
 import numpy as np
 from datamatrix import (
@@ -29,6 +28,7 @@ from nilearn import image
 import multiprocessing
 from forrestprf import data
 import statsmodels.formula.api as smf
+import argparse
 
 
 def prf(t):
@@ -37,18 +37,17 @@ def prf(t):
     return t ** 10.1 * np.exp(-10.1 * t / 930)
 
 
-RUNS = (1,) if '--test' in sys.argv else (1, 2, 3, 4, 5, 6, 7, 8)
-SUBJECTS = (1, ) if '--test' in sys.argv else (
-    1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 17, 18, 19, 20
-)
+# Constants
+ALL_RUNS = 1, 2, 3, 4, 5, 6, 7, 8
+ALL_SUBJECTS = 1, 2, 3, 4, 5, 6, 9, 10, 14, 15, 16, 17, 18, 19, 20
 PRF_XC = 80
 PRF_YC = 64
-N_PROCESS = 1 if '--single-process' in sys.argv else 6
 NIFTI_SRC = '../inputs/studyforrest-data-mni/sub-{sub:02}/sub-{sub:02}_task-avmovie_run-{run}_bold.nii.gz'
 MCPARAMS = '../inputs/studyforrest-data-aligned/sub-{sub:02}/in_bold3Tp2/sub-{sub:02}_task-avmovie_run-{run}_bold_mcparams.txt'
 TRACE_SRC = '../inputs/pupil-traces/sub-{sub:02}/run-{run}.csv'
 LC_ATLAS = '../inputs/mni-lc-atlas/lc-atlas-12.5.nii.gz'
 FULL_BRAIN = '../inputs/full-brain-mask.nii.gz'
+DST = '../outputs/correlation-matrices/sub-{sub:02}_run-{run}.pkl'
 FORNIX_ROI = 100, 100
 LGN_ROI = 103, 104
 BROCA_ROI = 13, 14
@@ -58,13 +57,9 @@ X = np.linspace(0, 20, 10)
 HRF = spmt(X)  # Hemodynamic response function
 PRF = prf(X)  # Pupil response function
 MULTIREGRESS = True
-REMOVE_LUMINANCE_FROM_PUPIL = '--remove-luminance' in sys.argv
 FORMULA_BOLD_TRACE = 'bold ~ {} + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
 FORMULA_TRACE_TRACE = '{} ~ {}'
 FORMULA_VOXEL_TRACE = 'bold ~ trace + rot_1 + rot_2 + rot_3 + trans_x + trans_y + trans_z'
-CONTROL = '--control' in sys.argv  # If set to True
-FULLBRAIN = '--fullbrain' in sys.argv  # If set to True
-DOWNSAMPLE = '--downsample' in sys.argv  # If set to True
 SRC_EMOTION = '../inputs/ioats_2s_av_allchar.csv'
 TRACES = 'pupil', 'arousal', 'luminance', 'change'  # All the timeseries
 EMOTION_SEGMENTATION = [
@@ -77,7 +72,6 @@ EMOTION_SEGMENTATION = [
     (5342, 6426),
     (6410, 7086)
 ]
-assert(not CONTROL or not FULLBRAIN)
 
 
 def flt(s):
@@ -205,8 +199,6 @@ def corr_img(img, trace, mcparams, xyz, deconv_bold):
     dm.trace = trace[SKIP_FIRST:]
     df = cnv.to_pandas(dm)
     for i, (x, y, z) in enumerate(zip(*xyz)):
-        if i and not i % 10000:
-            print('cycle: {}'.format(i))
         if DOWNSAMPLE and (x % 2 or y % 2 or z % 2):
             continue
         df.bold = flt(imgdat[x, y, z])[SKIP_FIRST:len(trace)]
@@ -242,7 +234,7 @@ def do_subject(sub):
         rdm['t_boldavg_{}'.format(trace)] = FloatColumn
     # Each trace is also compared to each other trace (but not itself)
     for tracename1, tracename2 in itertools.product(TRACES, TRACES):
-        if tracename1 < tracename2:
+        if tracename1 <= tracename2:
             continue
         rdm['t_{}_{}'.format(tracename1, tracename2)] = FloatColumn
     rdm.sub = sub
@@ -297,7 +289,7 @@ def do_subject(sub):
             row['t_boldavg_{}'.format(tracename)] = t
         # Correlate each trace with each other trace
         for tracename1, tracename2 in itertools.product(TRACES, TRACES):
-            if tracename1 < tracename2:
+            if tracename1 <= tracename2:
                 continue
             results = smf.ols(
                 FORMULA_TRACE_TRACE.format(tracename1, tracename2),
@@ -308,11 +300,74 @@ def do_subject(sub):
             row['t_{}_{}'.format(tracename1, tracename2)] = t
         row.run = run
     print('Done with sub: {}'.format(sub))
+    io.writepickle(rdm, DST.format(sub=sub, run=run))
     return rdm
+
+
+def parse_cmdargs():
+
+    global RUNS
+    global SUBJECTS
+    global N_PROCESS
+    global REMOVE_LUMINANCE_FROM_PUPIL
+    global CONTROL
+    global FULLBRAIN
+    global DOWNSAMPLE
+    global CONTROL
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--roi',
+        default='fullbrain',
+        help='The region of interest to analyze',
+    )
+    parser.add_argument(
+        '--n-process',
+        default=1,
+        type=int,
+        help="The number of parallel processes to use",
+    )
+    parser.add_argument(
+        '--remove-luminance-from-pupil',
+        action='store_true',
+        default=False,
+        help="Determines whether fixation luminance should be regressed out "
+             "of the pupil-size trace"
+    )
+    parser.add_argument(
+        '--downsample',
+        action='store_true',
+        default=False,
+        help="Determines whether the voxels should be downsampled, such that"
+             "only 1 voxel in each 2 x 2 x 2 space is sampled"
+    )
+    parser.add_argument(
+        '--runs',
+        default='all',
+        help="The video runs to process. Should be a list, e.g. [1, 2]",
+    )
+    parser.add_argument(
+        '--subjects',
+        default='all',
+        help="The subjects to process. Should be a list, e.g. [1, 2]",
+    )
+    args = parser.parse_args()
+
+    RUNS = eval(args.runs) if args.runs != 'all' else ALL_RUNS
+    SUBJECTS = (
+        eval(args.subjects) if args.subjects != 'all' else ALL_SUBJECTS
+    )
+    N_PROCESS = args.n_process
+    REMOVE_LUMINANCE_FROM_PUPIL = args.remove_luminance_from_pupil
+    CONTROL = args.roi == 'control'
+    FULLBRAIN = args.roi == 'fullbrain'
+    assert(not CONTROL or not FULLBRAIN)
+    DOWNSAMPLE = args.downsample
 
 
 if __name__ == '__main__':
 
+    parse_cmdargs()
     if CONTROL:
         print('Analyzing control ROI')
     elif FULLBRAIN:
@@ -326,12 +381,4 @@ if __name__ == '__main__':
         print('Using {} processes'.format(N_PROCESS))
         with multiprocessing.Pool(N_PROCESS) as pool:
             results = pool.map(do_subject, SUBJECTS)
-    dm = DataMatrix()
-    for rdm in results:
-        dm <<= rdm
-    if CONTROL:
-        io.writepickle(dm, '../outputs/correlation-matrix-control.pkl')
-    elif FULLBRAIN:
-        io.writepickle(dm, '../outputs/correlation-matrix-fullbrain.pkl')
-    else:
-        io.writepickle(dm, '../outputs/correlation-matrix-lc.pkl')
+    list(results)  # Consume the map
