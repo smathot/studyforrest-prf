@@ -47,7 +47,6 @@ MCPARAMS = '../inputs/studyforrest-data-aligned/sub-{sub:02}/in_bold3Tp2/sub-{su
 TRACE_SRC = '../inputs/pupil-traces/sub-{sub:02}/run-{run}.csv'
 LC_ATLAS = '../inputs/mni-lc-atlas/lc-atlas-12.5.nii.gz'
 FULL_BRAIN = '../inputs/full-brain-mask.nii.gz'
-DST = '../outputs/correlation-matrices/sub-{sub:02}_run-{run}.pkl'
 FORNIX_ROI = 100, 100
 LGN_ROI = 103, 104
 BROCA_ROI = 13, 14
@@ -304,9 +303,11 @@ def do_subject(sub):
     for row, run in zip(rdm, RUNS):
         do_run(sub, run, row, xyz)
         io.writepickle(rdm, DST.format(sub=sub, run=run))
+        print('Written {}'.format(DST.format(sub=sub, run=run)))
         print('Done with sub: {}, run: {}'.format(sub, run))
     print('Done with sub: {}, runs: {}'.format(sub, RUNS))
     io.writepickle(rdm, DST.format(sub=sub, run=RUNS))
+    print('Written {}'.format(DST.format(sub=sub, run=RUNS)))
     return rdm
 
 
@@ -319,12 +320,18 @@ def parse_cmdargs():
     global VISUAL_CORTEX
     global FULLBRAIN
     global DOWNSAMPLE
+    global DST
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--roi',
         default='fullbrain',
         help='The region of interest to analyze',
+    )
+    parser.add_argument(
+        '--dst',
+        default='../outputs/correlation-matrices/sub-{sub:02}_run-{run}.pkl',
+        help='Destination path template for results'
     )
     parser.add_argument(
         '--n-process',
@@ -367,6 +374,7 @@ def parse_cmdargs():
     VISUAL_CORTEX = args.roi == 'visual-cortex'
     FULLBRAIN = args.roi == 'fullbrain'
     DOWNSAMPLE = args.downsample
+    DST = args.dst
 
 
 if __name__ == '__main__':
