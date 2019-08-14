@@ -23,6 +23,7 @@ ROI_JUELICH = {
     'V2': (83, 84),
     'V3': (85, 86),
     'V4': (87, 88),
+    'VISUAL_CORTEX': (81, 82, 83, 84, 85, 86, 87, 88),
     'LGN': (103, 104)
 }
 # In case `code` is the working directory
@@ -69,7 +70,10 @@ def juelich_mask(roi):
 
     atlas = nib.load(JUELICH_ATLAS)
     a = atlas.get_data()
-    a[(a != roi[0]) & (a != roi[1])] = 0
+    m = np.ones(a.shape)
+    for r in roi:
+        m[a == r] = 0
+    a[m.nonzero()] = 0
     mask = image.resample_to_img(
         atlas,
         nib.load(FORREST_BRAIN),

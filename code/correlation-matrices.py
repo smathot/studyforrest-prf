@@ -51,7 +51,6 @@ DST = '../outputs/correlation-matrices/sub-{sub:02}_run-{run}.pkl'
 FORNIX_ROI = 100, 100
 LGN_ROI = 103, 104
 BROCA_ROI = 13, 14
-CONTROL_ROI = data.ROI_JUELICH['V1']  # 98, 99
 SKIP_FIRST = 3  # First samples of the bold signal to ignore
 X = np.linspace(0, 20, 10)
 HRF = spmt(X)  # Hemodynamic response function
@@ -211,14 +210,80 @@ def corr_img(img, trace, mcparams, xyz, deconv_bold):
     return nib.Nifti2Image(pcor, img.affine)
 
 
-def do_subject(sub):
+def do_run(sub, run, row, xyz):
+
+    print(
+        'Starting sub: {}, run: {}, voxels: {}'.format(
+            sub,
+            run,
+            len(xyz[0])
+        )
+    )
+    img = get_avmovie_data(sub, run)
+    traces = {
+        'pupil': get_pupil_data(sub, run),
+        'arousal': get_arousal_data(run),  # doesn't depend on subject
+        'luminance': get_luminance_data(sub, run),
+        'change': get_change_data(sub, run)
+    }
+    mcparams = get_mcparams(sub, run)
+    # Per-voxel correlationsx, y, z
+    for tracename, trace in traces.items():
+        row['t_bold_{}'.format(tracename)] = corr_img(
+            img,
+            trace,
+            mcparams,
+            xyz,
+            deconv_bold=tracename == 'pupil'  # PRF deconvolution
+        )
+    # Per-ROI correlations
+    voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
+    avg = np.nanmean(voxels, axis=0)
+    # Create a DataFrame with equally long traces, also including the
+    # average bold value
+    trace_len = min(len(trace) for trace in traces.values())
+    print('trace length: {}'.format(trace_len))
+    dm = mcparams[SKIP_FIRST:trace_len]
+    dm.bold = FloatColumn
+    dm.bold = avg[SKIP_FIRST:trace_len]
+    for tracename, trace in traces.items():
+        dm[tracename] = FloatColumn
+        dm[tracename] = trace[SKIP_FIRST:trace_len]
+    df = cnv.to_pandas(dm)
+    # Correlate each trace with the average bold signal
+    for tracename in traces:
+        results = smf.ols(
+            FORMULA_BOLD_TRACE.format(tracename),
+            data=df
+        ).fit()
+        t = results.tvalues[1]
+        print('t(boldavg ~ {}) = {:.4f}'.format(tracename, t))
+        row['t_boldavg_{}'.format(tracename)] = t
+    # Correlate each trace with each other trace
+    for tracename1, tracename2 in itertools.product(TRACES, TRACES):
+        if tracename1 <= tracename2:
+            continue
+        results = smf.ols(
+            FORMULA_TRACE_TRACE.format(tracename1, tracename2),
+            data=df
+        ).fit()
+        t = results.tvalues[1]
+        print('t({} ~ {}) = {:.4f}'.format(tracename1, tracename2, t))
+        row['t_{}_{}'.format(tracename1, tracename2)] = t
+    row.run = run
+
+
+def do_subject(sub_runs):
 
     """Determine per-voxel and average correlations between:
     - VC <-> pupil size, luminance
     """
 
-    if CONTROL:
-        mask = data.juelich_mask(CONTROL_ROI)
+    sub, runs = sub_runs
+    if isinstance(runs, int):
+        runs = [runs]
+    if VISUAL_CORTEX:
+        mask = data.juelich_mask(data.ROI_JUELICH['VISUAL_CORTEX'])
     elif FULLBRAIN:
         mask = image.load_img(FULL_BRAIN)
     else:
@@ -239,68 +304,12 @@ def do_subject(sub):
         rdm['t_{}_{}'.format(tracename1, tracename2)] = FloatColumn
     rdm.sub = sub
     rdm.run = -1
-    for row, run in zip(rdm, RUNS):
-        print(
-            'Starting sub: {}, run: {}, voxels: {}'.format(
-                sub,
-                run,
-                len(xyz[0])
-            )
-        )
-        img = get_avmovie_data(sub, run)
-        traces = {
-            'pupil': get_pupil_data(sub, run),
-            'arousal': get_arousal_data(run),  # doesn't depend on subject
-            'luminance': get_luminance_data(sub, run),
-            'change': get_change_data(sub, run)
-        }
-        mcparams = get_mcparams(sub, run)
-        # Per-voxel correlationsx, y, z
-        for tracename, trace in traces.items():
-            row['t_bold_{}'.format(tracename)] = corr_img(
-                img,
-                trace,
-                mcparams,
-                xyz,
-                deconv_bold=tracename == 'pupil'  # PRF deconvolution
-            )
-        # Per-ROI correlations
-        voxels = img.get_data()[xyz[0], xyz[1], xyz[2], :]
-        avg = np.nanmean(voxels, axis=0)
-        # Create a DataFrame with equally long traces, also including the
-        # average bold value
-        trace_len = min(len(trace) for trace in traces.values())
-        print('trace length: {}'.format(trace_len))
-        dm = mcparams[SKIP_FIRST:trace_len]
-        dm.bold = FloatColumn
-        dm.bold = avg[SKIP_FIRST:trace_len]
-        for tracename, trace in traces.items():
-            dm[tracename] = FloatColumn
-            dm[tracename] = trace[SKIP_FIRST:trace_len]
-        df = cnv.to_pandas(dm)
-        # Correlate each trace with the average bold signal
-        for tracename in traces:
-            results = smf.ols(
-                FORMULA_BOLD_TRACE.format(tracename),
-                data=df
-            ).fit()
-            t = results.tvalues[1]
-            print('t(boldavg ~ {}) = {:.4f}'.format(tracename, t))
-            row['t_boldavg_{}'.format(tracename)] = t
-        # Correlate each trace with each other trace
-        for tracename1, tracename2 in itertools.product(TRACES, TRACES):
-            if tracename1 <= tracename2:
-                continue
-            results = smf.ols(
-                FORMULA_TRACE_TRACE.format(tracename1, tracename2),
-                data=df
-            ).fit()
-            t = results.tvalues[1]
-            print('t({} ~ {}) = {:.4f}'.format(tracename1, tracename2, t))
-            row['t_{}_{}'.format(tracename1, tracename2)] = t
-        row.run = run
-    print('Done with sub: {}'.format(sub))
-    io.writepickle(rdm, DST.format(sub=sub, run=run))
+    for row, run in zip(rdm, runs):
+        do_run(sub, run, row, xyz)
+        io.writepickle(rdm, DST.format(sub=sub, run=run))
+        print('Done with sub: {}, run: {}'.format(sub, run))
+    print('Done with sub: {}, runs: {}'.format(sub, runs))
+    io.writepickle(rdm, DST.format(sub=sub, run=runs))
     return rdm
 
 
@@ -310,10 +319,9 @@ def parse_cmdargs():
     global SUBJECTS
     global N_PROCESS
     global REMOVE_LUMINANCE_FROM_PUPIL
-    global CONTROL
+    global VISUAL_CORTEX
     global FULLBRAIN
     global DOWNSAMPLE
-    global CONTROL
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -359,26 +367,25 @@ def parse_cmdargs():
     )
     N_PROCESS = args.n_process
     REMOVE_LUMINANCE_FROM_PUPIL = args.remove_luminance_from_pupil
-    CONTROL = args.roi == 'control'
+    VISUAL_CORTEX = args.roi == 'visual-cortex'
     FULLBRAIN = args.roi == 'fullbrain'
-    assert(not CONTROL or not FULLBRAIN)
     DOWNSAMPLE = args.downsample
 
 
 if __name__ == '__main__':
 
     parse_cmdargs()
-    if CONTROL:
-        print('Analyzing control ROI')
+    if VISUAL_CORTEX:
+        print('Analyzing visual cortex')
     elif FULLBRAIN:
         print('Analyzing full brain')
     else:
         print('Analyzing LC')
     if N_PROCESS == 1:
         print('Using single process')
-        results = map(do_subject, SUBJECTS)
+        results = map(do_subject, itertools.product(SUBJECTS, RUNS))
     else:
         print('Using {} processes'.format(N_PROCESS))
         with multiprocessing.Pool(N_PROCESS) as pool:
-            results = pool.map(do_subject, SUBJECTS)
+            results = pool.map(do_subject, itertools.product(SUBJECTS, RUNS))
     list(results)  # Consume the map
