@@ -273,15 +273,12 @@ def do_run(sub, run, row, xyz):
     row.run = run
 
 
-def do_subject(sub_runs):
+def do_subject(sub):
 
     """Determine per-voxel and average correlations between:
     - VC <-> pupil size, luminance
     """
 
-    sub, runs = sub_runs
-    if isinstance(runs, int):
-        runs = [runs]
     if VISUAL_CORTEX:
         mask = data.juelich_mask(data.ROI_JUELICH['VISUAL_CORTEX'])
     elif FULLBRAIN:
@@ -304,12 +301,12 @@ def do_subject(sub_runs):
         rdm['t_{}_{}'.format(tracename1, tracename2)] = FloatColumn
     rdm.sub = sub
     rdm.run = -1
-    for row, run in zip(rdm, runs):
+    for row, run in zip(rdm, RUNS):
         do_run(sub, run, row, xyz)
         io.writepickle(rdm, DST.format(sub=sub, run=run))
         print('Done with sub: {}, run: {}'.format(sub, run))
-    print('Done with sub: {}, runs: {}'.format(sub, runs))
-    io.writepickle(rdm, DST.format(sub=sub, run=runs))
+    print('Done with sub: {}, runs: {}'.format(sub, RUNS))
+    io.writepickle(rdm, DST.format(sub=sub, run=RUNS))
     return rdm
 
 
@@ -383,9 +380,9 @@ if __name__ == '__main__':
         print('Analyzing LC')
     if N_PROCESS == 1:
         print('Using single process')
-        results = map(do_subject, itertools.product(SUBJECTS, RUNS))
+        results = map(do_subject, SUBJECTS)
     else:
         print('Using {} processes'.format(N_PROCESS))
         with multiprocessing.Pool(N_PROCESS) as pool:
-            results = pool.map(do_subject, itertools.product(SUBJECTS, RUNS))
+            results = pool.map(do_subject, SUBJECTS)
     list(results)  # Consume the map
